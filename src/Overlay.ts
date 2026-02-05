@@ -1,11 +1,8 @@
 import { drag } from "d3-drag";
-import type { ScaleLinear } from "d3-scale";
-
 import type { Selection } from "d3-selection";
 import { identity } from "./linalg.js";
 import type { Projection } from "./Projection.js";
-
-export type Scale = ScaleLinear<number, number, never>;
+import type { Scale } from "./types.js";
 
 /**
  * SVG overlay with draggable axis handles.

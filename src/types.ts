@@ -43,3 +43,7 @@ export interface Margin {
 	bottom: number;
 	left: number;
 }
+
+import type { ScaleLinear } from "d3-scale";
+
+export type Scale = ScaleLinear<number, number, never>;

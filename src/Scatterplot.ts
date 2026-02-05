@@ -5,11 +5,11 @@ import { select } from "d3-selection";
 import { Emitter } from "./Emitter.js";
 import { Legend } from "./Legend.js";
 import { columnMax, columnMaxAbs, columnMin, identity, neg } from "./linalg.js";
-import type { Scale } from "./Overlay.js";
 import { Overlay } from "./Overlay.js";
 import { Projection } from "./Projection.js";
 import type {
 	Margin,
+	Scale,
 	ScatterData,
 	ScatterplotEvents,
 	ScatterplotOptions,
