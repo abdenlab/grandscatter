@@ -1,9 +1,6 @@
-import { select } from "d3-selection";
 import { scaleLinear } from "d3-scale";
-import { rgb } from "d3-color";
-import { Emitter } from "./Emitter.js";
-
 import type { Selection } from "d3-selection";
+import { Emitter } from "./Emitter.js";
 
 interface LegendEvents {
 	select: Set<number>;
@@ -13,9 +10,24 @@ interface LegendEvents {
 interface LegendOptions {
 	root: Selection<SVGSVGElement, unknown, null, undefined>;
 	title?: string;
-	margin?: Partial<{ top: number; right: number; bottom: number; left: number }>;
+	margin?: Partial<{
+		top: number;
+		right: number;
+		bottom: number;
+		left: number;
+	}>;
 }
 
+/**
+ * Interactive categorical legend rendered as SVG elements.
+ *
+ * Displays colored circles and text labels for each category. Supports
+ * hover (temporarily highlights a category) and click (toggles persistent
+ * selection). Emits `select` with the set of currently highlighted category
+ * indices, and `mouseout` with the persistent selection when the pointer
+ * leaves a label. The parent component is responsible for translating
+ * these events into rendering changes (e.g. setting `#visibleCategories`).
+ */
 export class Legend {
 	#data: [string, string][]; // [label, hexColor]
 	#margin: { top: number; right: number; bottom: number; left: number };

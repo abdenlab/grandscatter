@@ -1,12 +1,26 @@
-import { select } from "d3-selection";
 import { drag } from "d3-drag";
-import { identity } from "./linalg.js";
-import { data2canvas } from "./scales.js";
+import type { ScaleLinear } from "d3-scale";
 
-import type { Selection, BaseType } from "d3-selection";
-import type { Scale } from "./types.js";
+import type { Selection } from "d3-selection";
+import { identity } from "./linalg.js";
 import type { Projection } from "./Projection.js";
 
+export type Scale = ScaleLinear<number, number, never>;
+
+/**
+ * SVG overlay with draggable axis handles.
+ *
+ * Owns the drag-to-projection interaction: on drag, converts pixel deltas
+ * to data-space deltas via scale inverses, updates the Projection directly
+ * via {@link Projection.setAxis}, and notifies the parent via the
+ * `onProjectionChanged` callback. Also positions axis labels at each handle.
+ *
+ * Call {@link initAxes} after construction to create the handles, and
+ * {@link redrawAxes} each frame to reposition them to match the current
+ * projection. The overlay SVG is absolutely positioned over the parent
+ * figure element with `pointer-events: none`; only the anchor `<g>`
+ * groups receive pointer events.
+ */
 export class Overlay {
 	svg: Selection<SVGSVGElement, unknown, null, undefined>;
 	anchors?: Selection<SVGGElement, string, SVGSVGElement, unknown>;
@@ -57,16 +71,16 @@ export class Overlay {
 			7,
 			Math.min(10, Math.min(parent.clientWidth, parent.clientHeight) / 50),
 		);
-		this.anchors
-			?.select("circle")
-			.attr("r", this.#anchorRadius);
+		this.anchors?.select("circle").attr("r", this.#anchorRadius);
 	}
 
 	initAxes(
 		dimLabels: string[],
-		onDragStart: () => void,
-		onDrag: (axisIndex: number, dx: number, dy: number) => void,
-		onDragEnd: () => void,
+		callbacks: {
+			onDragStart?: () => void;
+			onDragEnd?: () => void;
+			onProjectionChanged: () => void;
+		},
 	): void {
 		this.anchors = this.svg
 			.selectAll<SVGGElement, string>(".anyscatter-anchor")
@@ -98,17 +112,21 @@ export class Overlay {
 
 		const d = drag<SVGGElement, string, unknown>()
 			.on("start", () => {
-				onDragStart();
+				callbacks.onDragStart?.();
 			})
 			.on("drag", function (event) {
 				const nodes = self.anchors!.nodes();
 				const i = nodes.indexOf(this);
 				const dx = self.#sx.invert(event.dx) - self.#sx.invert(0);
 				const dy = self.#sy.invert(event.dy) - self.#sy.invert(0);
-				onDrag(i, dx, dy);
+				const axis = self.#projection.getAxis(i);
+				axis[0] += dx;
+				axis[1] += dy;
+				self.#projection.setAxis(i, axis);
+				callbacks.onProjectionChanged();
 			})
 			.on("end", () => {
-				onDragEnd();
+				callbacks.onDragEnd?.();
 			});
 
 		this.anchors.call(d);
@@ -127,17 +145,17 @@ export class Overlay {
 			row.map((v) => v * r * signs[i]),
 		);
 		const projected = this.#projection.project(axisData);
-		const canvasPos = data2canvas(projected, this.#sx, this.#sy);
+
+		// Convert from data coordinates to canvas coordinates
+		const canvasPos = projected.map((row) => [
+			this.#sx(row[0]),
+			this.#sy(row[1]),
+		]);
 
 		this.anchors.attr(
 			"transform",
 			(_, i) => `translate(${canvasPos[i][0]}, ${canvasPos[i][1]})`,
 		);
-	}
-
-	updateScales(sx: Scale, sy: Scale): void {
-		this.#sx = sx;
-		this.#sy = sy;
 	}
 
 	destroy(): void {

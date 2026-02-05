@@ -1,5 +1,3 @@
-import type { ScaleLinear } from "d3-scale";
-
 export interface ScatterData {
 	/** Named columns of numeric data, one per dimension/axis. */
 	columns: Record<string, ArrayLike<number>>;
@@ -44,25 +42,4 @@ export interface Margin {
 	right: number;
 	bottom: number;
 	left: number;
-}
-
-export type Scale = ScaleLinear<number, number, never>;
-
-export interface InternalData {
-	/** Row-major data matrix: npoint x ndim */
-	matrix: number[][];
-	/** Number of data points */
-	npoint: number;
-	/** Number of dimensions */
-	ndim: number;
-	/** Dimension/axis labels (column names) */
-	dimLabels: string[];
-	/** Category label for each point (integer index into legendEntries) */
-	labelIndices: number[];
-	/** Per-point alpha values (0-255) */
-	alphas: number[];
-	/** Hex color per category */
-	hexColors: string[];
-	/** Legend entries: [label, hexColor] */
-	legendEntries: [string, string][];
 }

@@ -19,8 +19,9 @@ export function clone(m: number[][]): number[][] {
 export function transpose(m: number[][]): number[][] {
 	const rows = m.length;
 	const cols = m[0].length;
-	const result: number[][] = Array.from({ length: cols }, () =>
-		new Array(rows),
+	const result: number[][] = Array.from(
+		{ length: cols },
+		() => new Array(rows),
 	);
 	for (let i = 0; i < rows; i++) {
 		for (let j = 0; j < cols; j++) {
@@ -131,10 +132,7 @@ export function orthogonalize(
 	const n = matrix.length;
 
 	// Swap priority row to position 0
-	[matrix[0], matrix[priorityRowIndex]] = [
-		matrix[priorityRowIndex],
-		matrix[0],
-	];
+	[matrix[0], matrix[priorityRowIndex]] = [matrix[priorityRowIndex], matrix[0]];
 
 	// Normalize first row
 	matrix[0] = normalizeVec(matrix[0]);
@@ -153,10 +151,7 @@ export function orthogonalize(
 	}
 
 	// Swap back
-	[matrix[0], matrix[priorityRowIndex]] = [
-		matrix[priorityRowIndex],
-		matrix[0],
-	];
+	[matrix[0], matrix[priorityRowIndex]] = [matrix[priorityRowIndex], matrix[0]];
 
 	return matrix;
 }
@@ -186,21 +181,23 @@ export function circularBasis(ndim: number): number[][] {
 
 	// Column 0: cos
 	cols.push(
-		Array.from({ length: ndim }, (_, i) =>
-			a * Math.cos((2 * Math.PI * i) / ndim),
+		Array.from(
+			{ length: ndim },
+			(_, i) => a * Math.cos((2 * Math.PI * i) / ndim),
 		),
 	);
 
 	// Column 1: sin
 	cols.push(
-		Array.from({ length: ndim }, (_, i) =>
-			a * Math.sin((2 * Math.PI * i) / ndim),
+		Array.from(
+			{ length: ndim },
+			(_, i) => a * Math.sin((2 * Math.PI * i) / ndim),
 		),
 	);
 
 	// Complete the basis: try each standard basis vector, keep if independent
 	for (let j = 0; j < ndim && cols.length < ndim; j++) {
-		let v = Array.from({ length: ndim }, (_, k) => (k === j ? 1 : 0));
+		let v: number[] = Array.from({ length: ndim }, (_, k) => (k === j ? 1 : 0));
 
 		// Subtract projections onto existing columns
 		for (const col of cols) {

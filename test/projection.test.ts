@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { Projection } from "../src/Projection.js";
+import { describe, expect, it } from "vitest";
 import { identity } from "../src/linalg.js";
+import { Projection } from "../src/Projection.js";
 
 describe("Projection", () => {
 	describe("project", () => {
@@ -22,7 +22,10 @@ describe("Projection", () => {
 	describe("projectZ", () => {
 		it("returns zeros for ndim < 3", () => {
 			const p = new Projection(2, identity(2));
-			const data = [[1, 2], [3, 4]];
+			const data = [
+				[1, 2],
+				[3, 4],
+			];
 			expect(p.projectZ(data)).toEqual([0, 0]);
 		});
 
@@ -40,9 +43,9 @@ describe("Projection", () => {
 		it("z-sort separates overlapping points correctly", () => {
 			const p = new Projection(3, identity(3));
 			const data = [
-				[1, 1, 5],   // point 0: z=5 (front)
-				[1, 1, -3],  // point 1: z=-3 (back)
-				[1, 1, 0],   // point 2: z=0 (middle)
+				[1, 1, 5], // point 0: z=5 (front)
+				[1, 1, -3], // point 1: z=-3 (back)
+				[1, 1, 0], // point 2: z=0 (middle)
 			];
 
 			const z = p.projectZ(data);
@@ -62,8 +65,8 @@ describe("Projection", () => {
 			]);
 
 			const data = [
-				[0, 0, 5],   // dot with col2 [0,0,-1] = -5
-				[0, 0, -3],  // dot with col2 [0,0,-1] = +3
+				[0, 0, 5], // dot with col2 [0,0,-1] = -5
+				[0, 0, -3], // dot with col2 [0,0,-1] = +3
 			];
 
 			const z = p.projectZ(data);
@@ -81,8 +84,8 @@ describe("Projection", () => {
 			]);
 
 			const data = [
-				[10, 0, 3],  // dot with col2 [1,0,0] = 10
-				[-5, 0, 3],  // dot with col2 [1,0,0] = -5
+				[10, 0, 3], // dot with col2 [1,0,0] = 10
+				[-5, 0, 3], // dot with col2 [1,0,0] = -5
 			];
 
 			const z = p.projectZ(data);

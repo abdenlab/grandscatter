@@ -1,6 +1,5 @@
-import vertexSource from "./shaders/vertex.glsl.js";
 import fragmentSource from "./shaders/fragment.glsl.js";
-import { flatten } from "./linalg.js";
+import vertexSource from "./shaders/vertex.glsl.js";
 
 function compileShader(
 	gl: WebGLRenderingContext,
@@ -52,7 +51,10 @@ export class WebGLRenderer {
 
 	#clearColor: [number, number, number, number] = [0, 0, 0, 0];
 
-	constructor(canvas: HTMLCanvasElement, clearColor?: [number, number, number, number]) {
+	constructor(
+		canvas: HTMLCanvasElement,
+		clearColor?: [number, number, number, number],
+	) {
 		const gl = canvas.getContext("webgl", { premultipliedAlpha: false });
 		if (!gl) throw new Error("WebGL not supported");
 		this.gl = gl;
@@ -82,9 +84,15 @@ export class WebGLRenderer {
 
 		// Uniform locations
 		this.#pointSizeLoc = gl.getUniformLocation(this.#program, "point_size")!;
-		this.#isDrawingAxisLoc = gl.getUniformLocation(this.#program, "isDrawingAxis")!;
+		this.#isDrawingAxisLoc = gl.getUniformLocation(
+			this.#program,
+			"isDrawingAxis",
+		)!;
 		this.#canvasWidthLoc = gl.getUniformLocation(this.#program, "canvasWidth")!;
-		this.#canvasHeightLoc = gl.getUniformLocation(this.#program, "canvasHeight")!;
+		this.#canvasHeightLoc = gl.getUniformLocation(
+			this.#program,
+			"canvasHeight",
+		)!;
 
 		this.resize();
 	}
@@ -97,54 +105,36 @@ export class WebGLRenderer {
 	}
 
 	/**
-	 * Render data points and axis lines.
+	 * Render data points and axis lines from pre-built flat buffers.
 	 *
-	 * @param points - npoint x 2 canvas-space positions for data points
-	 * @param colors - RGBA per data point (0-255 each)
-	 * @param axisPoints - (ndim * 2) x 2 canvas-space positions for axis line endpoints
-	 * @param axisColors - RGBA per axis vertex
+	 * @param positions - interleaved [x,y] for all vertices (data points then axis verts)
+	 * @param colors - interleaved [r,g,b,a] for all vertices (0-255 each)
+	 * @param npoint - number of data points (drawn as POINTS)
+	 * @param naxisVerts - number of axis line vertices (drawn as LINES)
 	 * @param pointSize - point diameter in CSS pixels
 	 */
 	render(
-		points: number[][],
-		colors: [number, number, number, number][],
-		axisPoints: number[][],
-		axisColors: [number, number, number, number][],
+		positions: Float32Array,
+		colors: Uint8Array,
+		npoint: number,
+		naxisVerts: number,
 		pointSize: number,
 	): void {
 		const gl = this.gl;
-		const npoint = points.length;
-		const naxisVerts = axisPoints.length;
 
-		// Combine data + axis positions into a single buffer
-		const allPoints = points.concat(axisPoints);
-		const allColors = (colors as number[][]).concat(axisColors);
-
-		// Clear
 		gl.clearColor(...this.#clearColor);
 		gl.clear(gl.COLOR_BUFFER_BIT);
-
 		gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
 
-		// Position buffer: each point is [x, y] → we need vec4, pad with 0,0
-		const posData = new Float32Array(allPoints.length * 2);
-		for (let i = 0; i < allPoints.length; i++) {
-			posData[i * 2] = allPoints[i][0];
-			posData[i * 2 + 1] = allPoints[i][1];
-		}
-
+		// Position buffer
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.#positionBuffer);
-		gl.bufferData(gl.ARRAY_BUFFER, posData, gl.DYNAMIC_DRAW);
+		gl.bufferData(gl.ARRAY_BUFFER, positions, gl.DYNAMIC_DRAW);
 		gl.vertexAttribPointer(this.#positionLoc, 2, gl.FLOAT, false, 0, 0);
 		gl.enableVertexAttribArray(this.#positionLoc);
 
 		// Color buffer
 		gl.bindBuffer(gl.ARRAY_BUFFER, this.#colorBuffer);
-		gl.bufferData(
-			gl.ARRAY_BUFFER,
-			new Uint8Array(allColors.flat()),
-			gl.DYNAMIC_DRAW,
-		);
+		gl.bufferData(gl.ARRAY_BUFFER, colors, gl.DYNAMIC_DRAW);
 		gl.vertexAttribPointer(this.#colorLoc, 4, gl.UNSIGNED_BYTE, true, 0, 0);
 		gl.enableVertexAttribArray(this.#colorLoc);
 

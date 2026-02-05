@@ -1,23 +1,23 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-	identity,
-	zeros,
-	clone,
-	transpose,
-	matmul,
-	dot,
-	norm2,
 	add,
-	sub,
-	scale,
-	neg,
-	columnMin,
+	circularBasis,
+	clone,
 	columnMax,
 	columnMaxAbs,
-	orthogonalize,
-	flatten,
-	circularBasis,
+	columnMin,
 	determinant,
+	dot,
+	flatten,
+	identity,
+	matmul,
+	neg,
+	norm2,
+	orthogonalize,
+	scale,
+	sub,
+	transpose,
+	zeros,
 } from "../src/linalg.js";
 
 describe("identity", () => {
@@ -42,7 +42,10 @@ describe("zeros", () => {
 
 describe("clone", () => {
 	it("deep copies a 2D array", () => {
-		const m = [[1, 2], [3, 4]];
+		const m = [
+			[1, 2],
+			[3, 4],
+		];
 		const c = clone(m);
 		expect(c).toEqual(m);
 		c[0][0] = 99;
@@ -52,7 +55,12 @@ describe("clone", () => {
 
 describe("transpose", () => {
 	it("transposes a 2x3 matrix", () => {
-		expect(transpose([[1, 2, 3], [4, 5, 6]])).toEqual([
+		expect(
+			transpose([
+				[1, 2, 3],
+				[4, 5, 6],
+			]),
+		).toEqual([
 			[1, 4],
 			[2, 5],
 			[3, 6],
@@ -60,14 +68,28 @@ describe("transpose", () => {
 	});
 
 	it("transposes a square matrix", () => {
-		expect(transpose([[1, 2], [3, 4]])).toEqual([[1, 3], [2, 4]]);
+		expect(
+			transpose([
+				[1, 2],
+				[3, 4],
+			]),
+		).toEqual([
+			[1, 3],
+			[2, 4],
+		]);
 	});
 });
 
 describe("matmul", () => {
 	it("multiplies 2x2 matrices", () => {
-		const a = [[1, 2], [3, 4]];
-		const b = [[5, 6], [7, 8]];
+		const a = [
+			[1, 2],
+			[3, 4],
+		];
+		const b = [
+			[5, 6],
+			[7, 8],
+		];
 		expect(matmul(a, b)).toEqual([
 			[19, 22],
 			[43, 50],
@@ -81,7 +103,10 @@ describe("matmul", () => {
 	});
 
 	it("identity * A = A", () => {
-		const a = [[1, 2], [3, 4]];
+		const a = [
+			[1, 2],
+			[3, 4],
+		];
 		expect(matmul(identity(2), a)).toEqual(a);
 	});
 });
@@ -146,7 +171,11 @@ describe("column operations", () => {
 
 describe("orthogonalize", () => {
 	it("orthogonalizes rows of a 3x3 matrix", () => {
-		const m = [[1, 1, 0], [1, 0, 0], [0, 1, 1]];
+		const m = [
+			[1, 1, 0],
+			[1, 0, 0],
+			[0, 1, 1],
+		];
 		const result = orthogonalize(m);
 
 		// Check rows are orthogonal
@@ -163,7 +192,11 @@ describe("orthogonalize", () => {
 	});
 
 	it("preserves priority row direction", () => {
-		const m = [[1, 0, 0], [1, 1, 0], [0, 0, 1]];
+		const m = [
+			[1, 0, 0],
+			[1, 1, 0],
+			[0, 0, 1],
+		];
 		const result = orthogonalize(m, 1);
 
 		// Priority row (index 1) should point in original direction [1,1,0] (normalized)
@@ -185,7 +218,10 @@ describe("orthogonalize", () => {
 
 describe("flatten", () => {
 	it("flattens a 2D array to Float32Array", () => {
-		const result = flatten([[1, 2], [3, 4]]);
+		const result = flatten([
+			[1, 2],
+			[3, 4],
+		]);
 		expect(result).toBeInstanceOf(Float32Array);
 		expect(Array.from(result)).toEqual([1, 2, 3, 4]);
 	});
@@ -239,20 +275,24 @@ describe("determinant", () => {
 
 	it("single row swap flips sign", () => {
 		// Swap rows 0 and 1 of identity → det = -1
-		expect(determinant([
-			[0, 1, 0],
-			[1, 0, 0],
-			[0, 0, 1],
-		])).toBeCloseTo(-1);
+		expect(
+			determinant([
+				[0, 1, 0],
+				[1, 0, 0],
+				[0, 0, 1],
+			]),
+		).toBeCloseTo(-1);
 	});
 
 	it("reflection has det = -1", () => {
 		// Negate one row of identity
-		expect(determinant([
-			[-1, 0, 0],
-			[0, 1, 0],
-			[0, 0, 1],
-		])).toBeCloseTo(-1);
+		expect(
+			determinant([
+				[-1, 0, 0],
+				[0, 1, 0],
+				[0, 0, 1],
+			]),
+		).toBeCloseTo(-1);
 	});
 
 	it("orthogonal matrices have det = ±1", () => {
@@ -262,6 +302,11 @@ describe("determinant", () => {
 	});
 
 	it("2x2 case", () => {
-		expect(determinant([[3, 7], [1, -4]])).toBeCloseTo(-19);
+		expect(
+			determinant([
+				[3, 7],
+				[1, -4],
+			]),
+		).toBeCloseTo(-19);
 	});
 });

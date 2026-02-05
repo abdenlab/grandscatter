@@ -1,6 +1,6 @@
 export { Scatterplot } from "./Scatterplot.js";
 export type {
 	ScatterData,
-	ScatterplotOptions,
 	ScatterplotEvents,
+	ScatterplotOptions,
 } from "./types.js";

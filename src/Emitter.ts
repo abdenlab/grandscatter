@@ -1,7 +1,7 @@
 type Listener<T> = (event: T) => void;
 
 export class Emitter<Events extends { [K in keyof Events]: unknown }> {
-	#listeners = new Map<string, Set<Function>>();
+	#listeners = new Map<string, Set<(arg: never) => void>>();
 
 	on<K extends keyof Events & string>(
 		event: K,

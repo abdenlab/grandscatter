@@ -1,33 +1,126 @@
-import { select } from "d3-selection";
-import { scaleLinear } from "d3-scale";
 import { rgb } from "d3-color";
+import { scaleLinear } from "d3-scale";
 import { schemeCategory10 } from "d3-scale-chromatic";
-
+import { select } from "d3-selection";
 import { Emitter } from "./Emitter.js";
-import { Projection } from "./Projection.js";
-import { WebGLRenderer } from "./WebGLRenderer.js";
-import { Overlay } from "./Overlay.js";
 import { Legend } from "./Legend.js";
-import { identity, clone } from "./linalg.js";
-import {
-	updateScaleCenter,
-	updateScaleSpan,
-	data2canvas,
-	resizeCanvas,
-} from "./scales.js";
-
+import { columnMax, columnMaxAbs, columnMin, identity, neg } from "./linalg.js";
+import type { Scale } from "./Overlay.js";
+import { Overlay } from "./Overlay.js";
+import { Projection } from "./Projection.js";
 import type {
-	ScatterData,
-	ScatterplotOptions,
-	ScatterplotEvents,
-	InternalData,
-	Scale,
 	Margin,
+	ScatterData,
+	ScatterplotEvents,
+	ScatterplotOptions,
 } from "./types.js";
+import { WebGLRenderer } from "./WebGLRenderer.js";
+
+interface InternalData {
+	matrix: number[][];
+	npoint: number;
+	ndim: number;
+	dimLabels: string[];
+	labelIndices: number[];
+	alphas: number[];
+	hexColors: string[];
+	rgbTuples: [number, number, number][];
+	legendEntries: [string, string][];
+}
 
 const DEFAULT_MARGIN: Margin = { top: 22, right: 85, bottom: 40, left: 32 };
 
+/** Resize the canvas drawing buffer to match physical display pixels. */
+function resizeCanvas(canvas: HTMLCanvasElement, pixelRatio?: number): void {
+	const dpr = pixelRatio ?? window.devicePixelRatio;
+	const displayWidth = Math.round(dpr * canvas.clientWidth);
+	const displayHeight = Math.round(dpr * canvas.clientHeight);
+	if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+		canvas.width = displayWidth;
+		canvas.height = displayHeight;
+	}
+}
+
+/**
+ * Update scales so that the origin is at the center of the canvas
+ * (symmetric domains).
+ */
+export function updateScaleCenter(
+	points: number[][],
+	canvas: HTMLCanvasElement,
+	sx: Scale,
+	sy: Scale,
+	scaleFactor = 1.0,
+	margin: Margin = DEFAULT_MARGIN,
+): void {
+	const vmax = columnMaxAbs(points);
+	const vmin = neg(vmax);
+
+	const xDataRange = 2 * vmax[0];
+	const yDataRange = 2 * vmax[1];
+
+	const yMiddle = (canvas.clientHeight - margin.bottom + margin.top) / 2;
+	const yRadius0 = (canvas.clientHeight - margin.bottom - margin.top) / 2;
+	const xMiddle = (canvas.clientWidth - margin.right + margin.left) / 2;
+	const xRadius0 = (canvas.clientWidth - margin.right - margin.left) / 2;
+
+	const xRadius =
+		Math.min(xRadius0, (yRadius0 / yDataRange) * xDataRange) * scaleFactor;
+	const yRadius =
+		Math.min(yRadius0, (xRadius0 / xDataRange) * yDataRange) * scaleFactor;
+
+	sx.domain([vmin[0], vmax[0]]).range([xMiddle - xRadius, xMiddle + xRadius]);
+	sy.domain([vmin[1], vmax[1]]).range([yMiddle + yRadius, yMiddle - yRadius]);
+}
+
+/**
+ * Update scales to fit the data range (non-symmetric domains).
+ */
+export function updateScaleSpan(
+	points: number[][],
+	canvas: HTMLCanvasElement,
+	sx: Scale,
+	sy: Scale,
+	scaleFactor = 1.0,
+	margin: Margin = DEFAULT_MARGIN,
+): void {
+	const vmin = columnMin(points);
+	const vmax = columnMax(points);
+
+	const xDataRange = vmax[0] - vmin[0];
+	const yDataRange = vmax[1] - vmin[1];
+
+	const yMiddle = (canvas.clientHeight - margin.bottom + margin.top) / 2;
+	const yRadius0 = (canvas.clientHeight - margin.bottom - margin.top) / 2;
+	const xMiddle = (canvas.clientWidth - margin.right + margin.left) / 2;
+	const xRadius0 = (canvas.clientWidth - margin.right - margin.left) / 2;
+
+	const xRadius =
+		Math.min(xRadius0, (yRadius0 / yDataRange) * xDataRange) * scaleFactor;
+	const yRadius =
+		Math.min(yRadius0, (xRadius0 / xDataRange) * yDataRange) * scaleFactor;
+
+	sx.domain([vmin[0], vmax[0]]).range([xMiddle - xRadius, xMiddle + xRadius]);
+	sy.domain([vmin[1], vmax[1]]).range([yMiddle + yRadius, yMiddle - yRadius]);
+}
+
+/**
+ * Interactive multidimensional scatterplot.
+ *
+ * Orchestrates a {@link Projection}, {@link WebGLRenderer}, {@link Overlay},
+ * and {@link Legend}. Uses demand-driven rendering: state mutations
+ * (drag, resize, `setProjection`, `setAxis`, legend selection) call
+ * `#markDirty()`, which schedules a single `requestAnimationFrame`.
+ *
+ * Each render frame: projects data to 2D, depth-sorts (painter's algorithm),
+ * computes scales, writes positions and colors into pre-allocated flat typed
+ * arrays, issues one WebGL draw call, and repositions the SVG axis handles.
+ *
+ * Create via the static factory {@link Scatterplot.create}, then call
+ * {@link setData} to load data and begin rendering.
+ */
 export class Scatterplot {
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
 	#container: HTMLElement;
 	#canvas: HTMLCanvasElement;
 	#figure: ReturnType<typeof select<HTMLElement, unknown>>;
@@ -37,21 +130,27 @@ export class Scatterplot {
 	#legend?: Legend;
 	#emitter = new Emitter<ScatterplotEvents>();
 	#data?: InternalData;
-	#animId: number | null = null;
+	#playing = false;
+	#pendingFrame = 0;
 	#resizeObserver: ResizeObserver;
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
 	#isDragging = false;
+	#visibleCategories: Set<number> | null = null;
+	#order = new Uint32Array(0);
+	#glPositions = new Float32Array(0);
+	#glColors = new Uint8Array(0);
 
 	#sx: Scale;
 	#sy: Scale;
 
 	#opts: Required<
-		Pick<ScatterplotOptions, "pointSize" | "scaleMode" | "background" | "showAxisLabels" | "axisLength">
+		Pick<
+			ScatterplotOptions,
+			"pointSize" | "scaleMode" | "background" | "showAxisLabels" | "axisLength"
+		>
 	> & { margin: Margin; showLegend?: boolean; pixelRatio?: number };
 
-	private constructor(
-		container: HTMLElement,
-		opts: ScatterplotOptions = {},
-	) {
+	private constructor(container: HTMLElement, opts: ScatterplotOptions = {}) {
 		this.#container = container;
 		this.#opts = {
 			pointSize: opts.pointSize ?? 6,
@@ -91,7 +190,13 @@ export class Scatterplot {
 		this.#projection = new Projection(2);
 
 		// Initialize overlay
-		this.#overlay = new Overlay(this.#figure, this.#projection, this.#sx, this.#sy, this.#opts.axisLength);
+		this.#overlay = new Overlay(
+			this.#figure,
+			this.#projection,
+			this.#sx,
+			this.#sy,
+			this.#opts.axisLength,
+		);
 
 		// ResizeObserver
 		this.#resizeObserver = new ResizeObserver(() => this.resize());
@@ -112,6 +217,34 @@ export class Scatterplot {
 	 * Load data into the scatterplot.
 	 */
 	setData(data: ScatterData): void {
+		this.#data = this.#parseData(data);
+
+		const { npoint, ndim, dimLabels, legendEntries } = this.#data;
+
+		// Pre-allocate reusable render buffers
+		this.#order = new Uint32Array(npoint);
+		const nAxisVerts = ndim * 4;
+		this.#glPositions = new Float32Array((npoint + nAxisVerts) * 2);
+		this.#glColors = new Uint8Array((npoint + nAxisVerts) * 4);
+
+		this.#projection = new Projection(ndim);
+		this.#initOverlay(dimLabels);
+
+		const showLegend = this.#opts.showLegend ?? legendEntries.length > 0;
+		if (showLegend && legendEntries.length > 0) {
+			this.#initLegend(legendEntries);
+		}
+
+		this.#visibleCategories = null;
+		this.resize();
+
+		if (!this.#playing) {
+			this.#playing = true;
+		}
+		this.#markDirty();
+	}
+
+	#parseData(data: ScatterData): InternalData {
 		const dimLabels = Object.keys(data.columns);
 		const ndim = dimLabels.length;
 		const npoint = data.columns[dimLabels[0]].length;
@@ -133,7 +266,6 @@ export class Scatterplot {
 		let legendEntries: [string, string][] = [];
 
 		if (data.labels) {
-			// Determine categories from colors keys or unique labels
 			if (data.colors) {
 				categories = Object.keys(data.colors);
 				hexColors = Object.values(data.colors);
@@ -154,18 +286,21 @@ export class Scatterplot {
 			}
 			legendEntries = categories.map((c, i) => [c, hexColors[i]]);
 		} else {
-			// No labels: single category
 			hexColors = [schemeCategory10[0]];
 			labelIndices = new Array(npoint).fill(0);
 		}
 
-		// Build alphas
 		const alphas = new Array(npoint).fill(255);
 		if (data.alphas) {
 			for (let i = 0; i < npoint; i++) alphas[i] = data.alphas[i];
 		}
 
-		this.#data = {
+		const rgbTuples: [number, number, number][] = hexColors.map((c) => {
+			const parsed = rgb(c)!;
+			return [parsed.r, parsed.g, parsed.b];
+		});
+
+		return {
 			matrix,
 			npoint,
 			ndim,
@@ -173,13 +308,12 @@ export class Scatterplot {
 			labelIndices,
 			alphas,
 			hexColors,
+			rgbTuples,
 			legendEntries,
 		};
+	}
 
-		// Reset projection to match new dimensionality
-		this.#projection = new Projection(ndim);
-
-		// Re-initialize overlay
+	#initOverlay(dimLabels: string[]): void {
 		this.#overlay.destroy();
 		this.#overlay = new Overlay(
 			this.#figure,
@@ -188,95 +322,72 @@ export class Scatterplot {
 			this.#sy,
 			this.#opts.axisLength,
 		);
-
-		this.#overlay.initAxes(
-			dimLabels,
-			() => {
+		this.#overlay.initAxes(dimLabels, {
+			onDragStart: () => {
 				this.#isDragging = true;
 			},
-			(axisIndex, dx, dy) => {
-				const matrix = this.#projection.getMatrix();
-				matrix[axisIndex][0] += dx;
-				matrix[axisIndex][1] += dy;
-				this.#projection.setMatrix(
-					(() => {
-						// Use setAxis to orthogonalize with priority on the dragged axis
-						this.#projection.setAxis(axisIndex, matrix[axisIndex]);
-						return this.#projection.getMatrix();
-					})(),
-				);
+			onDragEnd: () => {
+				this.#isDragging = false;
+			},
+			onProjectionChanged: () => {
 				this.#emitter.emit("projection", {
 					matrix: this.#projection.getMatrix(),
 				});
+				this.#markDirty();
 			},
-			() => {
-				this.#isDragging = false;
-			},
-		);
-
-		// Initialize legend if labels exist and showLegend is not false
-		const showLegend = this.#opts.showLegend ?? legendEntries.length > 0;
-		if (showLegend && legendEntries.length > 0) {
-			this.#legend = new Legend(legendEntries, {
-				root: this.#overlay.svg,
-				margin: {
-					left: this.#opts.margin.right - 15,
-					right: 2,
-				},
-			});
-			this.#legend.on("select", (classes) => {
-				if (!this.#data) return;
-				for (let i = 0; i < this.#data.npoint; i++) {
-					this.#data.alphas[i] = classes.has(this.#data.labelIndices[i])
-						? 255
-						: 0;
-				}
-				const selectedLabels = new Set<string | number>();
-				for (const idx of classes) {
-					selectedLabels.add(this.#data.legendEntries[idx][0]);
-				}
-				this.#emitter.emit("select", { labels: selectedLabels });
-			});
-			this.#legend.on("mouseout", (classes) => {
-				if (!this.#data) return;
-				if (classes.size === 0) {
-					for (let i = 0; i < this.#data.npoint; i++) {
-						this.#data.alphas[i] = 255;
-					}
-					return;
-				}
-				for (let i = 0; i < this.#data.npoint; i++) {
-					this.#data.alphas[i] = classes.has(this.#data.labelIndices[i])
-						? 255
-						: 0;
-				}
-			});
-		}
-
-		this.resize();
-
-		// Start rendering if not already
-		if (this.#animId === null) {
-			this.play();
-		}
+		});
 	}
 
-	/** Start the render loop. */
+	#initLegend(entries: [string, string][]): void {
+		this.#legend = new Legend(entries, {
+			root: this.#overlay.svg,
+			margin: {
+				left: this.#opts.margin.right - 15,
+				right: 2,
+			},
+		});
+		this.#legend.on("select", (classes) => {
+			if (!this.#data) return;
+			this.#visibleCategories =
+				classes.size === this.#data.legendEntries.length
+					? null
+					: new Set(classes);
+			const selectedLabels = new Set<string | number>();
+			for (const idx of classes) {
+				selectedLabels.add(this.#data.legendEntries[idx][0]);
+			}
+			this.#emitter.emit("select", { labels: selectedLabels });
+			this.#markDirty();
+		});
+		this.#legend.on("mouseout", (classes) => {
+			this.#visibleCategories = classes.size === 0 ? null : new Set(classes);
+			this.#markDirty();
+		});
+	}
+
+	/** Enable rendering. Flushes any pending state changes. */
 	play(): void {
-		if (this.#animId !== null) return;
-		const loop = () => {
-			this.#render();
-			this.#animId = requestAnimationFrame(loop);
-		};
-		this.#animId = requestAnimationFrame(loop);
+		if (this.#playing) return;
+		this.#playing = true;
+		this.#markDirty();
 	}
 
-	/** Pause the render loop. */
+	/** Suppress rendering. No frames are drawn until play() is called. */
 	pause(): void {
-		if (this.#animId !== null) {
-			cancelAnimationFrame(this.#animId);
-			this.#animId = null;
+		this.#playing = false;
+		if (this.#pendingFrame !== 0) {
+			cancelAnimationFrame(this.#pendingFrame);
+			this.#pendingFrame = 0;
 		}
+	}
+
+	/** Schedule a single render frame if playing and none is pending. */
+	#markDirty(): void {
+		if (!this.#playing || this.#pendingFrame !== 0) return;
+		this.#pendingFrame = requestAnimationFrame(() => {
+			this.#pendingFrame = 0;
+			if (this.#playing) this.#render();
+		});
 	}
 
 	/** Force a resize recalculation. */
@@ -289,6 +400,7 @@ export class Scatterplot {
 			width: this.#canvas.clientWidth,
 			height: this.#canvas.clientHeight,
 		});
+		this.#markDirty();
 	}
 
 	/** Get a copy of the current projection matrix. */
@@ -302,6 +414,7 @@ export class Scatterplot {
 		this.#emitter.emit("projection", {
 			matrix: this.#projection.getMatrix(),
 		});
+		this.#markDirty();
 	}
 
 	/** Get a single axis vector. */
@@ -315,6 +428,7 @@ export class Scatterplot {
 		this.#emitter.emit("projection", {
 			matrix: this.#projection.getMatrix(),
 		});
+		this.#markDirty();
 	}
 
 	/** Number of data dimensions. */
@@ -347,49 +461,29 @@ export class Scatterplot {
 	#render(): void {
 		if (!this.#data) return;
 
-		const { matrix, npoint, ndim, labelIndices, alphas, hexColors } =
+		const { matrix, npoint, ndim, labelIndices, alphas, rgbTuples } =
 			this.#data;
 
-		// Project data
+		// Project data to 2D
 		const projected = this.#projection.project(matrix);
 
 		// Sort points back-to-front by z-depth (painter's algorithm)
 		const zValues = this.#projection.projectZ(matrix);
-		const order = Array.from({ length: npoint }, (_, i) => i);
+		const order = this.#order;
+		for (let i = 0; i < npoint; i++) order[i] = i;
 		order.sort((a, b) => zValues[a] - zValues[b]);
 
-		const sortedProjected = order.map((i) => projected[i]);
-		const sortedLabelIndices = order.map((i) => labelIndices[i]);
-		const sortedAlphas = order.map((i) => alphas[i]);
-
-		// Project both ends of each axis line
+		// Project axis endpoints
 		const r = this.#opts.axisLength;
 		const signs = this.#projection.axisZSigns();
 		const posAxisData = identity(ndim).map((row) => row.map((v) => v * r));
 		const negAxisData = identity(ndim).map((row) => row.map((v) => -v * r));
 		const posAxisProjected = this.#projection.project(posAxisData);
 		const negAxisProjected = this.#projection.project(negAxisData);
+		const originProjected = this.#projection.project([new Array(ndim).fill(0)]);
 
-		// Also project the origin for axis lines
-		const zeros = [new Array(ndim).fill(0)];
-		const originProjected = this.#projection.project(zeros);
-
-		// For each axis, the "toward viewer" end (sign=+1 → pos, sign=-1 → neg)
-		// gets the solid line, the opposite end gets the faint line.
-		const axisLinePoints: number[][] = [];
-		for (let i = 0; i < ndim; i++) {
-			const toward = signs[i] >= 0 ? posAxisProjected[i] : negAxisProjected[i];
-			axisLinePoints.push(originProjected[0]);
-			axisLinePoints.push(toward);
-		}
-		for (let i = 0; i < ndim; i++) {
-			const away = signs[i] >= 0 ? negAxisProjected[i] : posAxisProjected[i];
-			axisLinePoints.push(originProjected[0]);
-			axisLinePoints.push(away);
-		}
-
-		// Update scales (include both forward and backward axis endpoints)
-		const allPoints = sortedProjected.concat(posAxisProjected, negAxisProjected);
+		// Update scales (include data + axis endpoints)
+		const allPoints = projected.concat(posAxisProjected, negAxisProjected);
 		const margin = this.#opts.margin;
 
 		if (this.#opts.scaleMode === "center") {
@@ -402,53 +496,70 @@ export class Scatterplot {
 				margin,
 			);
 		} else {
-			updateScaleSpan(
-				allPoints,
-				this.#canvas,
-				this.#sx,
-				this.#sy,
-				1.0,
-				margin,
-			);
+			updateScaleSpan(allPoints, this.#canvas, this.#sx, this.#sy, 1.0, margin);
 		}
 
-		// Update overlay scales
-		this.#overlay.updateScales(this.#sx, this.#sy);
+		const sx = this.#sx;
+		const sy = this.#sy;
+		const pos = this.#glPositions;
+		const col = this.#glColors;
+		const vis = this.#visibleCategories;
 
-		// Transform to canvas space
-		const canvasPoints = data2canvas(sortedProjected, this.#sx, this.#sy);
-		const canvasAxisLines = data2canvas(axisLinePoints, this.#sx, this.#sy);
-
-		// Build colors (using sorted order)
-		const rgbColors = hexColors.map((c) => rgb(c)!);
-		const colors: [number, number, number, number][] = sortedLabelIndices.map(
-			(idx, i) => [
-				rgbColors[idx].r,
-				rgbColors[idx].g,
-				rgbColors[idx].b,
-				sortedAlphas[i],
-			],
-		);
-
-		// Axis colors: forward lines solid gray, backward lines faint
-		const axisColors: [number, number, number, number][] = [];
-		for (let i = 0; i < ndim * 2; i++) {
-			axisColors.push([150, 150, 150, 255]);
-		}
-		for (let i = 0; i < ndim * 2; i++) {
-			axisColors.push([180, 180, 180, 60]);
+		// Write sorted data points into flat buffers
+		for (let si = 0; si < npoint; si++) {
+			const oi = order[si];
+			pos[si * 2] = sx(projected[oi][0]);
+			pos[si * 2 + 1] = sy(projected[oi][1]);
+			const catIdx = labelIndices[oi];
+			const c4 = si * 4;
+			col[c4] = rgbTuples[catIdx][0];
+			col[c4 + 1] = rgbTuples[catIdx][1];
+			col[c4 + 2] = rgbTuples[catIdx][2];
+			col[c4 + 3] = vis === null || vis.has(catIdx) ? alphas[oi] : 0;
 		}
 
-		// Render
-		this.#webgl.render(
-			canvasPoints,
-			colors,
-			canvasAxisLines,
-			axisColors,
-			this.#opts.pointSize,
-		);
+		// Write axis line vertices: forward (solid) then backward (faint)
+		const nAxisVerts = ndim * 4;
+		let vi = npoint;
+		const ox = sx(originProjected[0][0]);
+		const oy = sy(originProjected[0][1]);
 
-		// Redraw axis handles
+		for (let i = 0; i < ndim; i++) {
+			const toward = signs[i] >= 0 ? posAxisProjected[i] : negAxisProjected[i];
+			pos[vi * 2] = ox;
+			pos[vi * 2 + 1] = oy;
+			col[vi * 4] = 150;
+			col[vi * 4 + 1] = 150;
+			col[vi * 4 + 2] = 150;
+			col[vi * 4 + 3] = 255;
+			vi++;
+			pos[vi * 2] = sx(toward[0]);
+			pos[vi * 2 + 1] = sy(toward[1]);
+			col[vi * 4] = 150;
+			col[vi * 4 + 1] = 150;
+			col[vi * 4 + 2] = 150;
+			col[vi * 4 + 3] = 255;
+			vi++;
+		}
+		for (let i = 0; i < ndim; i++) {
+			const away = signs[i] >= 0 ? negAxisProjected[i] : posAxisProjected[i];
+			pos[vi * 2] = ox;
+			pos[vi * 2 + 1] = oy;
+			col[vi * 4] = 180;
+			col[vi * 4 + 1] = 180;
+			col[vi * 4 + 2] = 180;
+			col[vi * 4 + 3] = 60;
+			vi++;
+			pos[vi * 2] = sx(away[0]);
+			pos[vi * 2 + 1] = sy(away[1]);
+			col[vi * 4] = 180;
+			col[vi * 4 + 1] = 180;
+			col[vi * 4 + 2] = 180;
+			col[vi * 4 + 3] = 60;
+			vi++;
+		}
+
+		this.#webgl.render(pos, col, npoint, nAxisVerts, this.#opts.pointSize);
 		this.#overlay.redrawAxes();
 	}
 }
