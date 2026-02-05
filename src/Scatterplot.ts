@@ -531,16 +531,16 @@ export class Scatterplot {
 			const toward = signs[i] >= 0 ? posAxisProjected[i] : negAxisProjected[i];
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
-			col[vi * 4] = 150;
-			col[vi * 4 + 1] = 150;
-			col[vi * 4 + 2] = 150;
+			col[vi * 4] = 0;
+			col[vi * 4 + 1] = 0;
+			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 255;
 			vi++;
 			pos[vi * 2] = sx(toward[0]);
 			pos[vi * 2 + 1] = sy(toward[1]);
-			col[vi * 4] = 150;
-			col[vi * 4 + 1] = 150;
-			col[vi * 4 + 2] = 150;
+			col[vi * 4] = 0;
+			col[vi * 4 + 1] = 0;
+			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 255;
 			vi++;
 		}
@@ -548,16 +548,16 @@ export class Scatterplot {
 			const away = signs[i] >= 0 ? negAxisProjected[i] : posAxisProjected[i];
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
-			col[vi * 4] = 180;
-			col[vi * 4 + 1] = 180;
-			col[vi * 4 + 2] = 180;
+			col[vi * 4] = 0;
+			col[vi * 4 + 1] = 0;
+			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 60;
 			vi++;
 			pos[vi * 2] = sx(away[0]);
 			pos[vi * 2 + 1] = sy(away[1]);
-			col[vi * 4] = 180;
-			col[vi * 4 + 1] = 180;
-			col[vi * 4 + 2] = 180;
+			col[vi * 4] = 0;
+			col[vi * 4 + 1] = 0;
+			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 60;
 			vi++;
 		}
