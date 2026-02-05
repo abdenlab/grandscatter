@@ -112,9 +112,9 @@ export function updateScaleSpan(
  * (drag, resize, `setProjection`, `setAxis`, legend selection) call
  * `#markDirty()`, which schedules a single `requestAnimationFrame`.
  *
- * Each render frame: projects data to 2D, depth-sorts (painter's algorithm),
- * computes scales, writes positions and colors into pre-allocated flat typed
- * arrays, issues one WebGL draw call, and repositions the SVG axis handles.
+ * Each render frame: projects data to 2D, computes scales, writes positions
+ * and colors into pre-allocated flat typed arrays, issues one WebGL draw call,
+ * and repositions the SVG axis handles.
  *
  * Create via the static factory {@link Scatterplot.create}, then call
  * {@link setData} to load data and begin rendering.
@@ -126,13 +126,11 @@ export class Scatterplot {
 	#overlay: Overlay;
 	#projection!: Projection;
 	#legend?: Legend;
-	#emitter = new Emitter<ScatterplotEvents>();
 	#data?: InternalData;
-	#playing = false;
-	#pendingFrame = 0;
+	#emitter = new Emitter<ScatterplotEvents>();
+
 	#resizeObserver: ResizeObserver;
 	#visibleCategories: Set<number> | null = null;
-	#order = new Uint32Array(0);
 	#glPositions = new Float32Array(0);
 	#glColors = new Uint8Array(0);
 
@@ -140,6 +138,8 @@ export class Scatterplot {
 	#container: HTMLElement;
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
 	#isDragging = false;
+	#playing = false;
+	#pendingFrame = 0;
 
 	#sx: Scale;
 	#sy: Scale;
@@ -223,7 +223,6 @@ export class Scatterplot {
 		const { npoint, ndim, dimLabels, legendEntries } = this.#data;
 
 		// Pre-allocate reusable render buffers
-		this.#order = new Uint32Array(npoint);
 		const nAxisVerts = ndim * 4;
 		this.#glPositions = new Float32Array((npoint + nAxisVerts) * 2);
 		this.#glColors = new Uint8Array((npoint + nAxisVerts) * 4);
@@ -468,12 +467,6 @@ export class Scatterplot {
 		// Project data to 2D
 		const projected = this.#projection.project(matrix);
 
-		// Sort points back-to-front by z-depth (painter's algorithm)
-		const zValues = this.#projection.projectZ(matrix);
-		const order = this.#order;
-		for (let i = 0; i < npoint; i++) order[i] = i;
-		order.sort((a, b) => zValues[a] - zValues[b]);
-
 		// Project axis endpoints
 		const r = this.#opts.axisLength;
 		const signs = this.#projection.axisZSigns();
@@ -506,17 +499,16 @@ export class Scatterplot {
 		const col = this.#glColors;
 		const vis = this.#visibleCategories;
 
-		// Write sorted data points into flat buffers
-		for (let si = 0; si < npoint; si++) {
-			const oi = order[si];
-			pos[si * 2] = sx(projected[oi][0]);
-			pos[si * 2 + 1] = sy(projected[oi][1]);
-			const catIdx = labelIndices[oi];
-			const c4 = si * 4;
+		// Write data points into flat buffers
+		for (let i = 0; i < npoint; i++) {
+			pos[i * 2] = sx(projected[i][0]);
+			pos[i * 2 + 1] = sy(projected[i][1]);
+			const catIdx = labelIndices[i];
+			const c4 = i * 4;
 			col[c4] = rgbTuples[catIdx][0];
 			col[c4 + 1] = rgbTuples[catIdx][1];
 			col[c4 + 2] = rgbTuples[catIdx][2];
-			col[c4 + 3] = vis === null || vis.has(catIdx) ? alphas[oi] : 0;
+			col[c4 + 3] = vis === null || vis.has(catIdx) ? alphas[i] : 0;
 		}
 
 		// Write axis line vertices: forward (solid) then backward (faint)
