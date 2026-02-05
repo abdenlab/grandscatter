@@ -120,8 +120,6 @@ export function updateScaleSpan(
  * {@link setData} to load data and begin rendering.
  */
 export class Scatterplot {
-	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
-	#container: HTMLElement;
 	#canvas: HTMLCanvasElement;
 	#figure: ReturnType<typeof select<HTMLElement, unknown>>;
 	#webgl: WebGLRenderer;
@@ -133,12 +131,15 @@ export class Scatterplot {
 	#playing = false;
 	#pendingFrame = 0;
 	#resizeObserver: ResizeObserver;
-	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
-	#isDragging = false;
 	#visibleCategories: Set<number> | null = null;
 	#order = new Uint32Array(0);
 	#glPositions = new Float32Array(0);
 	#glColors = new Uint8Array(0);
+
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
+	#container: HTMLElement;
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
+	#isDragging = false;
 
 	#sx: Scale;
 	#sy: Scale;
