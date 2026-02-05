@@ -75,4 +75,40 @@ export class Projection {
 		const col2 = this.#matrix.map((row) => row[2]);
 		return data.map((row) => dot(row, col2));
 	}
+
+	/**
+	 * Compute per-point proximity from the viewer, normalized so the
+	 * closest point is 1 and the farthest is `min`. For ndim < 3 (no
+	 * depth axis), returns all 1s.
+	 *
+	 * @param data - npoint x ndim matrix
+	 * @param min  - proximity value for the farthest point (default 0.1)
+	 * @returns Float64Array of length npoint, values in [min, 1]
+	 */
+	proximity(data: number[][], min = 0.5): Float64Array {
+		const n = data.length;
+		const out = new Float64Array(n);
+		if (this.#ndim < 3) {
+			out.fill(1);
+			return out;
+		}
+		const col2 = this.#matrix.map((row) => row[2]);
+		let zMin = Infinity;
+		let zMax = -Infinity;
+		for (let i = 0; i < n; i++) {
+			const z = dot(data[i], col2);
+			out[i] = z;
+			if (z < zMin) zMin = z;
+			if (z > zMax) zMax = z;
+		}
+		const range = zMax - zMin;
+		if (range === 0) {
+			out.fill(1);
+		} else {
+			for (let i = 0; i < n; i++) {
+				out[i] = min + ((out[i] - zMin) / range) * (1 - min);
+			}
+		}
+		return out;
+	}
 }

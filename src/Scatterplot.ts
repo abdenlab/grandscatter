@@ -133,6 +133,7 @@ export class Scatterplot {
 	#visibleCategories: Set<number> | null = null;
 	#glPositions = new Float32Array(0);
 	#glColors = new Uint8Array(0);
+	#glSizes = new Float32Array(0);
 
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
 	#container: HTMLElement;
@@ -224,8 +225,10 @@ export class Scatterplot {
 
 		// Pre-allocate reusable render buffers
 		const nAxisVerts = ndim * 4;
-		this.#glPositions = new Float32Array((npoint + nAxisVerts) * 2);
-		this.#glColors = new Uint8Array((npoint + nAxisVerts) * 4);
+		const totalVerts = npoint + nAxisVerts;
+		this.#glPositions = new Float32Array(totalVerts * 2);
+		this.#glColors = new Uint8Array(totalVerts * 4);
+		this.#glSizes = new Float32Array(totalVerts);
 
 		this.#projection = new Projection(ndim);
 		this.#initOverlay(dimLabels);
@@ -497,12 +500,19 @@ export class Scatterplot {
 		const sy = this.#sy;
 		const pos = this.#glPositions;
 		const col = this.#glColors;
+		const siz = this.#glSizes;
 		const vis = this.#visibleCategories;
+
+		// Compute per-point sizes scaled by depth proximity
+		const dpr = this.#opts.pixelRatio ?? window.devicePixelRatio;
+		const baseSize = this.#opts.pointSize * dpr;
+		const prox = this.#projection.proximity(matrix);
 
 		// Write data points into flat buffers
 		for (let i = 0; i < npoint; i++) {
 			pos[i * 2] = sx(projected[i][0]);
 			pos[i * 2 + 1] = sy(projected[i][1]);
+			siz[i] = baseSize * prox[i];
 			const catIdx = labelIndices[i];
 			const c4 = i * 4;
 			col[c4] = rgbTuples[catIdx][0];
@@ -552,7 +562,7 @@ export class Scatterplot {
 			vi++;
 		}
 
-		this.#webgl.render(pos, col, npoint, nAxisVerts, this.#opts.pointSize);
+		this.#webgl.render(pos, col, siz, npoint, nAxisVerts);
 		this.#overlay.redrawAxes();
 	}
 }

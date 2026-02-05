@@ -42,9 +42,10 @@ export class WebGLRenderer {
 
 	#positionBuffer: WebGLBuffer;
 	#colorBuffer: WebGLBuffer;
+	#sizeBuffer: WebGLBuffer;
 	#positionLoc: number;
 	#colorLoc: number;
-	#pointSizeLoc: WebGLUniformLocation;
+	#sizeLoc: number;
 	#isDrawingAxisLoc: WebGLUniformLocation;
 	#canvasWidthLoc: WebGLUniformLocation;
 	#canvasHeightLoc: WebGLUniformLocation;
@@ -77,13 +78,14 @@ export class WebGLRenderer {
 		// Buffers
 		this.#positionBuffer = gl.createBuffer()!;
 		this.#colorBuffer = gl.createBuffer()!;
+		this.#sizeBuffer = gl.createBuffer()!;
 
 		// Attribute locations
 		this.#positionLoc = gl.getAttribLocation(this.#program, "a_position");
 		this.#colorLoc = gl.getAttribLocation(this.#program, "a_color");
+		this.#sizeLoc = gl.getAttribLocation(this.#program, "a_size");
 
 		// Uniform locations
-		this.#pointSizeLoc = gl.getUniformLocation(this.#program, "point_size")!;
 		this.#isDrawingAxisLoc = gl.getUniformLocation(
 			this.#program,
 			"isDrawingAxis",
@@ -109,16 +111,16 @@ export class WebGLRenderer {
 	 *
 	 * @param positions - interleaved [x,y] for all vertices (data points then axis verts)
 	 * @param colors - interleaved [r,g,b,a] for all vertices (0-255 each)
+	 * @param sizes - per-vertex point size in physical pixels (data points + axis verts)
 	 * @param npoint - number of data points (drawn as POINTS)
 	 * @param naxisVerts - number of axis line vertices (drawn as LINES)
-	 * @param pointSize - point diameter in CSS pixels
 	 */
 	render(
 		positions: Float32Array,
 		colors: Uint8Array,
+		sizes: Float32Array,
 		npoint: number,
 		naxisVerts: number,
-		pointSize: number,
 	): void {
 		const gl = this.gl;
 
@@ -138,8 +140,13 @@ export class WebGLRenderer {
 		gl.vertexAttribPointer(this.#colorLoc, 4, gl.UNSIGNED_BYTE, true, 0, 0);
 		gl.enableVertexAttribArray(this.#colorLoc);
 
+		// Size buffer
+		gl.bindBuffer(gl.ARRAY_BUFFER, this.#sizeBuffer);
+		gl.bufferData(gl.ARRAY_BUFFER, sizes, gl.DYNAMIC_DRAW);
+		gl.vertexAttribPointer(this.#sizeLoc, 1, gl.FLOAT, false, 0, 0);
+		gl.enableVertexAttribArray(this.#sizeLoc);
+
 		// Draw data points
-		gl.uniform1f(this.#pointSizeLoc, pointSize * window.devicePixelRatio);
 		gl.uniform1i(this.#isDrawingAxisLoc, 0);
 		gl.drawArrays(gl.POINTS, 0, npoint);
 
@@ -152,6 +159,7 @@ export class WebGLRenderer {
 		const gl = this.gl;
 		gl.deleteBuffer(this.#positionBuffer);
 		gl.deleteBuffer(this.#colorBuffer);
+		gl.deleteBuffer(this.#sizeBuffer);
 		gl.deleteProgram(this.#program);
 	}
 }
