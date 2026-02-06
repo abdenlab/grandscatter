@@ -1,5 +1,4 @@
-import { scaleLinear } from "d3-scale";
-import type { Selection } from "d3-selection";
+import { select } from "d3-selection";
 import { Emitter } from "./Emitter.js";
 
 interface LegendEvents {
@@ -8,18 +7,12 @@ interface LegendEvents {
 }
 
 interface LegendOptions {
-	root: Selection<SVGSVGElement, unknown, null, undefined>;
+	container: HTMLElement;
 	title?: string;
-	margin?: Partial<{
-		top: number;
-		right: number;
-		bottom: number;
-		left: number;
-	}>;
 }
 
 /**
- * Interactive categorical legend rendered as SVG elements.
+ * Interactive categorical legend rendered as HTML elements.
  *
  * Displays colored circles and text labels for each category. Supports
  * hover (temporarily highlights a category) and click (toggles persistent
@@ -30,62 +23,92 @@ interface LegendOptions {
  */
 export class Legend {
 	#data: [string, string][]; // [label, hexColor]
-	#margin: { top: number; right: number; bottom: number; left: number };
 	#emitter = new Emitter<LegendEvents>();
-	#root: Selection<SVGSVGElement, unknown, null, undefined>;
-	#mark: Selection<SVGCircleElement, [string, string], SVGSVGElement, unknown>;
-	#box: Selection<SVGRectElement, number, SVGSVGElement, unknown>;
-	#text: Selection<SVGTextElement, [string, string], SVGSVGElement, unknown>;
-	#title?: Selection<SVGTextElement, string, SVGSVGElement, unknown>;
-	#titleBg?: Selection<SVGRectElement, number, SVGSVGElement, unknown>;
+	#container: HTMLElement;
+	#wrapper: HTMLElement;
 
 	constructor(data: [string, string][], options: LegendOptions) {
 		this.#data = data;
-		this.#root = options.root;
-		this.#margin = { top: 20, bottom: 0, left: 0, right: 0, ...options.margin };
+		this.#container = options.container;
 		const selected = new Set<number>();
 
-		this.#box = this.#root
-			.selectAll<SVGRectElement, number>(".legendBox")
-			.data([0])
-			.enter()
-			.append("rect")
-			.attr("class", "legendBox")
-			.attr("fill", "rgba(0,0,0,0)")
-			.attr("stroke", "#c1c1c1")
-			.attr("stroke-width", 1);
+		// Create wrapper div
+		this.#wrapper = document.createElement("div");
+		this.#wrapper.className = "anyscatter-legend";
+		this.#wrapper.style.cssText = `
+			padding: 8px 12px;
+			border: 1px solid #c1c1c1;
+			border-radius: 6px;
+			margin: 8px;
+			font-family: system-ui, sans-serif;
+			font-size: 12px;
+		`;
+		this.#container.appendChild(this.#wrapper);
 
-		this.#mark = this.#root
-			.selectAll<SVGCircleElement, [string, string]>(".legendMark")
+		// Optional title
+		if (options.title) {
+			const titleEl = document.createElement("div");
+			titleEl.className = "anyscatter-legend-title";
+			titleEl.textContent = options.title;
+			titleEl.style.cssText = `
+				font-weight: 600;
+				margin-bottom: 6px;
+				text-align: center;
+			`;
+			this.#wrapper.appendChild(titleEl);
+		}
+
+		// Create items
+		const items = select(this.#wrapper)
+			.selectAll<HTMLDivElement, [string, string]>(".anyscatter-legend-item")
 			.data(this.#data)
 			.enter()
-			.append("circle")
-			.attr("class", "legendMark");
+			.append("div")
+			.attr("class", "anyscatter-legend-item")
+			.style("display", "flex")
+			.style("align-items", "center")
+			.style("gap", "6px")
+			.style("padding", "3px 0")
+			.style("cursor", "pointer")
+			.style("user-select", "none");
+
+		// Color circle
+		items
+			.append("span")
+			.attr("class", "anyscatter-legend-mark")
+			.style("width", "10px")
+			.style("height", "10px")
+			.style("border-radius", "50%")
+			.style("flex-shrink", "0")
+			.style("background-color", ([_, color]) => color);
+
+		// Label text
+		items
+			.append("span")
+			.attr("class", "anyscatter-legend-label")
+			.style("color", "#333")
+			.text(([label]) => label);
+
+		const self = this;
 
 		const restoreAlpha = () => {
-			this.#mark.attr("opacity", (_, i) =>
-				selected.size === 0 || selected.has(i) ? 1.0 : 0.1,
+			items.style("opacity", (_, i) =>
+				selected.size === 0 || selected.has(i) ? "1" : "0.3",
 			);
-			this.#emitter.emit("mouseout", selected);
+			self.#emitter.emit("mouseout", selected);
 		};
 
-		const makeSelect = <E extends SVGElement>(
-			sel: Selection<E, [string, string], SVGSVGElement, unknown>,
-		) => {
-			return function (this: E) {
-				const nodes = sel.nodes();
+		items
+			.on("mouseover", function () {
+				const nodes = items.nodes();
 				const i = nodes.indexOf(this);
 				const classes = new Set(selected);
 				if (!classes.has(i)) classes.add(i);
 				self.#emitter.emit("select", classes);
-			};
-		};
-
-		const makeClick = <E extends SVGElement>(
-			sel: Selection<E, [string, string], SVGSVGElement, unknown>,
-		) => {
-			return function (this: E) {
-				const nodes = sel.nodes();
+			})
+			.on("mouseout", restoreAlpha)
+			.on("click", function () {
+				const nodes = items.nodes();
 				const i = nodes.indexOf(this);
 				if (selected.has(i)) {
 					selected.delete(i);
@@ -96,51 +119,7 @@ export class Legend {
 				if (selected.size === data.length) {
 					selected.clear();
 				}
-			};
-		};
-
-		const self = this;
-
-		this.#mark
-			.attr("fill", ([_, color]) => color)
-			.on("mouseover", makeSelect(this.#mark))
-			.on("mouseout", restoreAlpha)
-			.on("click", makeClick(this.#mark));
-
-		this.#text = this.#root
-			.selectAll<SVGTextElement, [string, string]>(".legendText")
-			.data(this.#data)
-			.enter()
-			.append("text")
-			.attr("class", "legendText");
-
-		this.#text
-			.attr("text-anchor", "start")
-			.attr("fill", "#333")
-			.text(([label]) => label)
-			.on("mouseover", makeSelect(this.#text))
-			.on("mouseout", restoreAlpha)
-			.on("click", makeClick(this.#text));
-
-		if (options.title) {
-			this.#titleBg = this.#root
-				.selectAll<SVGRectElement, number>(".legendTitleBg")
-				.data([0])
-				.enter()
-				.append("rect")
-				.attr("class", "legendTitleBg")
-				.attr("fill", "rgba(0,0,0,0)");
-
-			this.#title = this.#root
-				.selectAll<SVGTextElement, string>(".legendTitle")
-				.data([options.title])
-				.enter()
-				.append("text")
-				.attr("class", "legendTitle")
-				.attr("alignment-baseline", "middle")
-				.attr("text-anchor", "middle")
-				.text((d) => d);
-		}
+			});
 	}
 
 	on<E extends keyof LegendEvents>(
@@ -151,50 +130,10 @@ export class Legend {
 	}
 
 	resize(): void {
-		const width = this.#root.node()!.clientWidth;
-		const padding = 8;
+		// No-op: HTML elements handle their own sizing
+	}
 
-		const sx = scaleLinear()
-			.domain([0, 1])
-			.range([width - this.#margin.left, width - this.#margin.right]);
-
-		const sy = scaleLinear()
-			.domain([-1, 0, this.#data.length, this.#data.length + 1])
-			.range([
-				this.#margin.top - padding,
-				this.#margin.top,
-				this.#margin.top + 170,
-				this.#margin.top + 170 + padding,
-			]);
-
-		const r = (sy(1) - sy(0)) / 4;
-
-		this.#mark
-			.attr("cx", sx(0.001) + 2.5 * r)
-			.attr("cy", (_, i) => sy(i + 0.5))
-			.attr("r", r);
-
-		this.#text
-			.attr("x", sx(0.0) + 2.5 * r + 2.5 * r)
-			.attr("y", (_, i) => sy(i + 0.7));
-
-		this.#box
-			.attr("x", sx.range()[0])
-			.attr("y", sy(-1))
-			.attr("width", sx.range()[1] - sx.range()[0])
-			.attr("height", sy(this.#data.length + 1) - sy(-1))
-			.attr("rx", r);
-
-		if (this.#title && this.#titleBg) {
-			this.#title.attr("x", sx(0.5)).attr("y", sy(-1));
-
-			const bbox = this.#title.node()!.getBBox();
-			const p = 2;
-			this.#titleBg
-				.attr("x", bbox.x - p)
-				.attr("y", bbox.y - p)
-				.attr("width", bbox.width + 2 * p)
-				.attr("height", bbox.height + 2 * p);
-		}
+	destroy(): void {
+		this.#wrapper.remove();
 	}
 }

@@ -28,7 +28,7 @@ interface InternalData {
 	legendEntries: [string, string][];
 }
 
-const DEFAULT_MARGIN: Margin = { top: 22, right: 85, bottom: 40, left: 32 };
+const DEFAULT_MARGIN: Margin = { top: 22, right: 32, bottom: 40, left: 32 };
 
 /** Resize the canvas drawing buffer to match physical display pixels. */
 function resizeCanvas(canvas: HTMLCanvasElement, pixelRatio?: number): void {
@@ -138,6 +138,8 @@ export class Scatterplot {
 
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
 	#container: HTMLElement;
+	#figureWrapper: HTMLElement;
+	#legendContainer: HTMLElement;
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
 	#isDragging = false;
 	#playing = false;
@@ -155,12 +157,22 @@ export class Scatterplot {
 			| "showAxisLabels"
 			| "axisLength"
 			| "depthSort"
+			| "legendWidth"
 		>
-	> & { margin: Margin; showLegend?: boolean; pixelRatio?: number };
+	> & {
+		margin: Margin;
+		showLegend?: boolean;
+		pixelRatio?: number;
+		width?: number;
+		height?: number;
+	};
 
 	private constructor(container: HTMLElement, opts: ScatterplotOptions = {}) {
 		this.#container = container;
 		this.#opts = {
+			width: opts.width,
+			height: opts.height,
+			legendWidth: opts.legendWidth ?? 120,
 			pointSize: opts.pointSize ?? 6,
 			scaleMode: opts.scaleMode ?? "center",
 			background: opts.background ?? [0, 0, 0, 0],
@@ -172,20 +184,41 @@ export class Scatterplot {
 			depthSort: opts.depthSort ?? true,
 		};
 
-		// Ensure the container is positioned for overlay alignment
-		const pos = getComputedStyle(container).position;
-		if (pos === "static") {
-			container.style.position = "relative";
-		}
+		// Create wrapper: [figure (canvas + overlay)] + [legend]
+		container.style.display = "flex";
+		container.style.flexDirection = "row";
 
-		// Create canvas
+		// Figure wrapper holds canvas and overlay
+		this.#figureWrapper = document.createElement("div");
+		this.#figureWrapper.style.position = "relative";
+		if (this.#opts.width !== undefined) {
+			this.#figureWrapper.style.width = `${this.#opts.width}px`;
+		} else {
+			this.#figureWrapper.style.flex = "1 1 auto";
+			this.#figureWrapper.style.minWidth = "0";
+		}
+		if (this.#opts.height !== undefined) {
+			this.#figureWrapper.style.height = `${this.#opts.height}px`;
+		} else {
+			this.#figureWrapper.style.height = "100%";
+		}
+		container.appendChild(this.#figureWrapper);
+
+		// Legend container is a fixed-width sibling
+		this.#legendContainer = document.createElement("div");
+		this.#legendContainer.style.width = `${this.#opts.legendWidth}px`;
+		this.#legendContainer.style.flexShrink = "0";
+		this.#legendContainer.style.display = "none"; // shown when legend is created
+		container.appendChild(this.#legendContainer);
+
+		// Create canvas inside figure wrapper
 		this.#canvas = document.createElement("canvas");
 		this.#canvas.style.width = "100%";
 		this.#canvas.style.height = "100%";
 		this.#canvas.style.display = "block";
-		container.appendChild(this.#canvas);
+		this.#figureWrapper.appendChild(this.#canvas);
 
-		this.#figure = select(container);
+		this.#figure = select(this.#figureWrapper);
 
 		// Initialize scales
 		this.#sx = scaleLinear();
@@ -207,9 +240,9 @@ export class Scatterplot {
 			this.#opts.axisLength,
 		);
 
-		// ResizeObserver
+		// ResizeObserver - observe the figure wrapper for canvas sizing
 		this.#resizeObserver = new ResizeObserver(() => this.resize());
-		this.#resizeObserver.observe(container);
+		this.#resizeObserver.observe(this.#figureWrapper);
 	}
 
 	/**
@@ -244,6 +277,10 @@ export class Scatterplot {
 		const showLegend = this.#opts.showLegend ?? legendEntries.length > 0;
 		if (showLegend && legendEntries.length > 0) {
 			this.#initLegend(legendEntries);
+		} else {
+			this.#legend?.destroy();
+			this.#legend = undefined;
+			this.#legendContainer.style.display = "none";
 		}
 
 		this.#visibleCategories = null;
@@ -350,12 +387,10 @@ export class Scatterplot {
 	}
 
 	#initLegend(entries: [string, string][]): void {
+		this.#legend?.destroy();
+		this.#legendContainer.style.display = "block";
 		this.#legend = new Legend(entries, {
-			root: this.#overlay.svg,
-			margin: {
-				left: this.#opts.margin.right - 15,
-				right: 2,
-			},
+			container: this.#legendContainer,
 		});
 		this.#legend.on("select", (classes) => {
 			if (!this.#data) return;
@@ -465,8 +500,10 @@ export class Scatterplot {
 		this.pause();
 		this.#resizeObserver.disconnect();
 		this.#overlay.destroy();
+		this.#legend?.destroy();
 		this.#webgl.destroy();
-		this.#canvas.remove();
+		this.#figureWrapper.remove();
+		this.#legendContainer.remove();
 	}
 
 	#render(): void {

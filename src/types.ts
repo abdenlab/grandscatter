@@ -1,3 +1,5 @@
+import type { ScaleLinear } from "d3-scale";
+
 export interface ScatterData {
 	/** Named columns of numeric data, one per dimension/axis. */
 	columns: Record<string, ArrayLike<number>>;
@@ -10,6 +12,12 @@ export interface ScatterData {
 }
 
 export interface ScatterplotOptions {
+	/** Canvas width in CSS pixels. Default: fills container */
+	width?: number;
+	/** Canvas height in CSS pixels. Default: fills container */
+	height?: number;
+	/** Legend width in CSS pixels. Default: 100. Ignored if showLegend is false. */
+	legendWidth?: number;
 	/** Point diameter in CSS pixels. Default: 6 */
 	pointSize?: number;
 	/** Scale mode: "center" keeps origin centered, "span" fits data range. Default: "center" */
@@ -45,7 +53,5 @@ export interface Margin {
 	bottom: number;
 	left: number;
 }
-
-import type { ScaleLinear } from "d3-scale";
 
 export type Scale = ScaleLinear<number, number, never>;
