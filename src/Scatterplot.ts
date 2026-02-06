@@ -134,6 +134,7 @@ export class Scatterplot {
 	#glPositions = new Float32Array(0);
 	#glColors = new Uint8Array(0);
 	#glSizes = new Float32Array(0);
+	#order = new Uint32Array(0);
 
 	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
 	#container: HTMLElement;
@@ -148,7 +149,12 @@ export class Scatterplot {
 	#opts: Required<
 		Pick<
 			ScatterplotOptions,
-			"pointSize" | "scaleMode" | "background" | "showAxisLabels" | "axisLength"
+			| "pointSize"
+			| "scaleMode"
+			| "background"
+			| "showAxisLabels"
+			| "axisLength"
+			| "depthSort"
 		>
 	> & { margin: Margin; showLegend?: boolean; pixelRatio?: number };
 
@@ -163,6 +169,7 @@ export class Scatterplot {
 			showAxisLabels: opts.showAxisLabels ?? true,
 			axisLength: opts.axisLength ?? 1,
 			pixelRatio: opts.pixelRatio,
+			depthSort: opts.depthSort ?? true,
 		};
 
 		// Ensure the container is positioned for overlay alignment
@@ -229,6 +236,7 @@ export class Scatterplot {
 		this.#glPositions = new Float32Array(totalVerts * 2);
 		this.#glColors = new Uint8Array(totalVerts * 4);
 		this.#glSizes = new Float32Array(totalVerts);
+		this.#order = new Uint32Array(npoint);
 
 		this.#projection = new Projection(ndim);
 		this.#initOverlay(dimLabels);
@@ -508,13 +516,21 @@ export class Scatterplot {
 		const baseSize = this.#opts.pointSize * dpr;
 		const prox = this.#projection.proximity(matrix);
 
-		// Write data points into flat buffers
-		for (let i = 0; i < npoint; i++) {
-			pos[i * 2] = sx(projected[i][0]);
-			pos[i * 2 + 1] = sy(projected[i][1]);
-			siz[i] = baseSize * prox[i];
+		// Sort points back-to-front by proximity (farthest first)
+		const order = this.#order;
+		for (let i = 0; i < npoint; i++) order[i] = i;
+		if (this.#opts.depthSort) {
+			order.sort((a, b) => prox[a] - prox[b]);
+		}
+
+		// Write data points into flat buffers (in sorted order)
+		for (let si = 0; si < npoint; si++) {
+			const i = order[si];
+			pos[si * 2] = sx(projected[i][0]);
+			pos[si * 2 + 1] = sy(projected[i][1]);
+			siz[si] = baseSize * prox[i];
 			const catIdx = labelIndices[i];
-			const c4 = i * 4;
+			const c4 = si * 4;
 			col[c4] = rgbTuples[catIdx][0];
 			col[c4 + 1] = rgbTuples[catIdx][1];
 			col[c4 + 2] = rgbTuples[catIdx][2];

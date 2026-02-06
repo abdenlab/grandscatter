@@ -26,6 +26,8 @@ export interface ScatterplotOptions {
 	axisLength?: number;
 	/** Device pixel ratio override. Default: window.devicePixelRatio */
 	pixelRatio?: number;
+	/** Sort points back-to-front by depth for correct occlusion. Default: true */
+	depthSort?: boolean;
 }
 
 export interface ScatterplotEvents {
