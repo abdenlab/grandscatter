@@ -164,7 +164,7 @@ export class Overlay {
 		const towardData = identity(ndim).map((row, i) =>
 			row.map((v) => v * r * signs[i]),
 		);
-		const towardProjected = this.#projection.project(towardData);
+		const towardProjected = this.#projection.projectXY(towardData);
 		const towardPos = towardProjected.map((row) => [
 			this.#sx(row[0]),
 			this.#sy(row[1]),
@@ -180,7 +180,7 @@ export class Overlay {
 			const awayData = identity(ndim).map((row, i) =>
 				row.map((v) => v * r * -signs[i]),
 			);
-			const awayProjected = this.#projection.project(awayData);
+			const awayProjected = this.#projection.projectXY(awayData);
 			const awayPos = awayProjected.map((row) => [
 				this.#sx(row[0]),
 				this.#sy(row[1]),

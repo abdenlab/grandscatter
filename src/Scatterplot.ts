@@ -513,16 +513,16 @@ export class Scatterplot {
 			this.#data;
 
 		// Project data to 2D
-		const projected = this.#projection.project(matrix);
+		const projected = this.#projection.projectXY(matrix);
 
 		// Project axis endpoints
 		const r = this.#opts.axisLength;
 		const signs = this.#projection.axisZSigns();
 		const posAxisData = identity(ndim).map((row) => row.map((v) => v * r));
 		const negAxisData = identity(ndim).map((row) => row.map((v) => -v * r));
-		const posAxisProjected = this.#projection.project(posAxisData);
-		const negAxisProjected = this.#projection.project(negAxisData);
-		const originProjected = this.#projection.project([new Array(ndim).fill(0)]);
+		const posAxisProjected = this.#projection.projectXY(posAxisData);
+		const negAxisProjected = this.#projection.projectXY(negAxisData);
+		const originProjected = this.#projection.projectXY([new Array(ndim).fill(0)]);
 
 		// Update scales (include data + axis endpoints)
 		const allPoints = projected.concat(posAxisProjected, negAxisProjected);

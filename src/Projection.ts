@@ -3,6 +3,20 @@ import { circularBasis, clone, dot, matmul, orthogonalize } from "./linalg.js";
 /**
  * Manages an ndim x ndim orthogonal projection matrix and projects
  * high-dimensional data down to 2D.
+ *
+ * ## Rows represent the data axes (features/dimensions)
+ * Each row i represents how the i-th axis in data space contributes to the
+ * projection axes. When you drag an axis handle, you are modifying the
+ * corresponding row of the projection matrix. The rows are kept orthogonal via
+ * Gram-Schmidt, so dragging one axis will affect the others to maintain a
+ * valid projection.
+ *
+ * ## Columns represent the projection axes in the canvas (X, Y, Z, +)
+ * Each column j represents the contribution of the j-th data dimension to the
+ * canvas projection axes X and Y. Column 0 is the x-axis contribution, column
+ * 1 is the y-axis contribution, and column 2 (if ndim >= 3) is the depth
+ * contribution. Columns 3+ are additional orthogonal directions that are not
+ * displayed.
  */
 export class Projection {
 	#matrix: number[][];
@@ -45,21 +59,12 @@ export class Projection {
 	}
 
 	/**
-	 * Returns the sign of column 2 for each axis: +1 if the axis
-	 * points toward the viewer, -1 if away. For ndim < 3, returns all +1.
-	 */
-	axisZSigns(): number[] {
-		if (this.#ndim < 3) return new Array(this.#ndim).fill(1);
-		return this.#matrix.map((row) => (row[2] >= 0 ? 1 : -1));
-	}
-
-	/**
 	 * Project data points to 2D.
 	 *
 	 * @param data - npoint x ndim matrix (each row is a data point)
 	 * @returns npoint x 2 matrix (each row is [x, y])
 	 */
-	project(data: number[][]): number[][] {
+	projectXY(data: number[][]): number[][] {
 		// Extract the first 2 columns of the projection matrix (ndim x 2).
 		const proj = this.#matrix.map((row) => [row[0], row[1]]);
 		// data (npoint x ndim) @ proj (ndim x 2) → npoint x 2
@@ -74,6 +79,15 @@ export class Projection {
 		if (this.#ndim < 3) return new Array(data.length).fill(0);
 		const col2 = this.#matrix.map((row) => row[2]);
 		return data.map((row) => dot(row, col2));
+	}
+
+	/**
+	 * Returns the sign of column 2 for each axis: +1 if the axis
+	 * points toward the viewer, -1 if away. For ndim < 3, returns all +1.
+	 */
+	axisZSigns(): number[] {
+		if (this.#ndim < 3) return new Array(this.#ndim).fill(1);
+		return this.#matrix.map((row) => (row[2] >= 0 ? 1 : -1));
 	}
 
 	/**

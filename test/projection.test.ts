@@ -3,7 +3,7 @@ import { identity } from "../src/linalg.js";
 import { Projection } from "../src/Projection.js";
 
 describe("Projection", () => {
-	describe("project", () => {
+	describe("projectXY", () => {
 		it("projects 3D points using first 2 columns", () => {
 			const p = new Projection(3, identity(3));
 			// With identity matrix, column 0 = [1,0,0], column 1 = [0,1,0]
@@ -12,7 +12,7 @@ describe("Projection", () => {
 				[1, 2, 3],
 				[4, 5, 6],
 			];
-			expect(p.project(data)).toEqual([
+			expect(p.projectXY(data)).toEqual([
 				[1, 2],
 				[4, 5],
 			]);
