@@ -13,7 +13,7 @@ import { circularBasis, clone, dot, matmul, orthogonalize } from "./linalg.js";
  *
  * ## Columns represent the projection axes in the canvas (X, Y, Z, +)
  * Each column j represents the contribution of the j-th data dimension to the
- * canvas projection axes X and Y. Column 0 is the x-axis contribution, column
+ * canvas projection axes. Column 0 is the x-axis contribution, column
  * 1 is the y-axis contribution, and column 2 (if ndim >= 3) is the depth
  * contribution. Columns 3+ are additional orthogonal directions that are not
  * displayed.
@@ -52,10 +52,30 @@ export class Projection {
 	/**
 	 * Sets the i-th axis vector and re-orthogonalizes the matrix,
 	 * keeping the i-th row as the priority (unchanged after normalization).
+	 *
+	 * If the orthogonalization would flip the z-axis (column 2), we negate
+	 * column 2 to preserve depth ordering stability.
 	 */
 	setAxis(i: number, vec: number[]): void {
+		// Save old column 2 before orthogonalization (if it exists)
+		const oldCol2 =
+			this.#ndim >= 3 ? this.#matrix.map((row) => row[2]) : null;
+
 		this.#matrix[i] = vec.slice();
 		this.#matrix = orthogonalize(this.#matrix, i);
+
+		// Prevent z-axis flip: if column 2 reversed direction, negate it
+		if (oldCol2) {
+			let dotProduct = 0;
+			for (let j = 0; j < this.#ndim; j++) {
+				dotProduct += oldCol2[j] * this.#matrix[j][2];
+			}
+			if (dotProduct < 0) {
+				for (let j = 0; j < this.#ndim; j++) {
+					this.#matrix[j][2] *= -1;
+				}
+			}
+		}
 	}
 
 	/**

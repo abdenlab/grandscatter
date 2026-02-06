@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { identity } from "../src/linalg.js";
+import { dot, identity } from "../src/linalg.js";
 import { Projection } from "../src/Projection.js";
 
 describe("Projection", () => {
@@ -93,6 +93,45 @@ describe("Projection", () => {
 			expect(z[1]).toBeCloseTo(-5);
 			// A has higher z (drawn on top)
 			expect(z[0]).toBeGreaterThan(z[1]);
+		});
+	});
+
+	describe("setAxis", () => {
+		it("prevents z-axis flip during orthogonalization", () => {
+			const p = new Projection(3, identity(3));
+			// Get initial column 2: [0, 0, 1]
+			const getCol2 = () => p.getMatrix().map((row) => row[2]);
+			const oldCol2 = getCol2();
+
+			// Make a large perturbation to axis 0 that could flip column 2
+			// by pushing it strongly into the z direction
+			p.setAxis(0, [0.1, 0.1, 1]);
+
+			const newCol2 = getCol2();
+
+			// Column 2 should not have flipped: dot product should be positive
+			const dotProduct = dot(oldCol2, newCol2);
+			expect(dotProduct).toBeGreaterThan(0);
+		});
+
+		it("preserves orthonormality after preventing z-flip", () => {
+			const p = new Projection(3, identity(3));
+
+			// Make a perturbation
+			p.setAxis(0, [0.1, 0.1, 1]);
+
+			const m = p.getMatrix();
+
+			// Check rows are unit vectors
+			for (const row of m) {
+				const norm = Math.sqrt(dot(row, row));
+				expect(norm).toBeCloseTo(1);
+			}
+
+			// Check rows are orthogonal
+			expect(dot(m[0], m[1])).toBeCloseTo(0);
+			expect(dot(m[0], m[2])).toBeCloseTo(0);
+			expect(dot(m[1], m[2])).toBeCloseTo(0);
 		});
 	});
 });
