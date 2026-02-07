@@ -40,21 +40,30 @@ function randn() {
 }
 
 const N = 200; // points per cluster
+const dataDim = 5;
 const centers = [
-	[2, 0, 0, 1, -1],
-	[-1, 2, -1, 0, 1],
-	[0, -2, 2, -1, 0],
+	[2, 0, 0, 1, -1],  // Cluster A (red)
+	[-1, 2, -1, 0, 1],  // Cluster B (blue)
+	[0, -2, 2, -1, 0], // Cluster C (green)
 ];
+// const centers = [
+// 	[2, 0, 0],
+// 	[-1, 2, -1],
+// 	[0, -2, 2],
+// ];
 const clusterNames = ["Cluster A", "Cluster B", "Cluster C"];
 const colors = { "Cluster A": "#e41a1c", "Cluster B": "#377eb8", "Cluster C": "#4daf4a" };
 
-const columns = { x1: [], x2: [], x3: [], x4: [], x5: [] };
+const columns = {};
+for (let i = 0; i < dataDim; i++) {
+	columns[`x${i + 1}`] = [];
+}
 const labels = [];
 const keys = Object.keys(columns);
 
 for (let c = 0; c < centers.length; c++) {
 	for (let i = 0; i < N; i++) {
-		for (let d = 0; d < 5; d++) {
+		for (let d = 0; d < dataDim; d++) {
 			columns[keys[d]].push(centers[c][d] + randn() * 0.6);
 		}
 		labels.push(clusterNames[c]);
@@ -67,7 +76,7 @@ for (const key of keys) {
 }
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
-	pointSize: 6,
+	pointSize: 8,
 	scaleMode: "center",
 	axisLength: 2,
 });

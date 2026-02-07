@@ -522,7 +522,9 @@ export class Scatterplot {
 		const negAxisData = identity(ndim).map((row) => row.map((v) => -v * r));
 		const posAxisProjected = this.#projection.projectXY(posAxisData);
 		const negAxisProjected = this.#projection.projectXY(negAxisData);
-		const originProjected = this.#projection.projectXY([new Array(ndim).fill(0)]);
+		const originProjected = this.#projection.projectXY([
+			new Array(ndim).fill(0),
+		]);
 
 		// Update scales (include data + axis endpoints)
 		const allPoints = projected.concat(posAxisProjected, negAxisProjected);
@@ -551,7 +553,7 @@ export class Scatterplot {
 		// Compute per-point sizes scaled by depth proximity
 		const dpr = this.#opts.pixelRatio ?? window.devicePixelRatio;
 		const baseSize = this.#opts.pointSize * dpr;
-		const prox = this.#projection.proximity(matrix);
+		const prox = this.#projection.proximityPerspective(matrix);
 
 		// Sort points back-to-front by proximity (farthest first)
 		const order = this.#order;

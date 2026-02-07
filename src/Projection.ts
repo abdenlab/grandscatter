@@ -58,8 +58,7 @@ export class Projection {
 	 */
 	setAxis(i: number, vec: number[]): void {
 		// Save old column 2 before orthogonalization (if it exists)
-		const oldCol2 =
-			this.#ndim >= 3 ? this.#matrix.map((row) => row[2]) : null;
+		const oldCol2 = this.#ndim >= 3 ? this.#matrix.map((row) => row[2]) : null;
 
 		this.#matrix[i] = vec.slice();
 		this.#matrix = orthogonalize(this.#matrix, i);
@@ -119,7 +118,7 @@ export class Projection {
 	 * @param min  - proximity value for the farthest point (default 0.1)
 	 * @returns Float64Array of length npoint, values in [min, 1]
 	 */
-	proximity(data: number[][], min = 0.5): Float64Array {
+	proximity(data: number[][], min = 0.1): Float64Array {
 		const n = data.length;
 		const out = new Float64Array(n);
 		if (this.#ndim < 3) {
@@ -142,6 +141,47 @@ export class Projection {
 			for (let i = 0; i < n; i++) {
 				out[i] = min + ((out[i] - zMin) / range) * (1 - min);
 			}
+		}
+		return out;
+	}
+
+	/**
+	 * Compute per-point perspective scaling factors based on depth, where
+	 * closer points are scaled up and farther points are scaled down. The
+	 * `focalLength` parameter controls how quickly the scaling changes with
+	 * depth. For ndim < 3 (no depth axis), returns all 1s.
+	 *
+	 * @param data - npoint x ndim matrix
+	 * @param focalLength - controls perspective strength (default 1)
+	 * @param min - minimum scaling factor for farthest points (default 0.1)
+	 * @returns Float64Array of length npoint, values in [min, 1], where 1 is
+	 * closest and min is farthest
+	 */
+	proximityPerspective(
+		data: number[][],
+		focalLength = 2,
+		min = 0.2,
+	): Float64Array {
+		const n = data.length;
+		const out = new Float64Array(n);
+		if (this.#ndim < 3) {
+			out.fill(1);
+			return out;
+		}
+		let zMin = Infinity;
+		for (let i = 0; i < n; i++) {
+			const z = dot(
+				data[i],
+				this.#matrix.map((row) => row[2]),
+			);
+			if (z < zMin) zMin = z;
+		}
+		const cameraOffset = Math.abs(zMin) + 0.1;
+		const col2 = this.#matrix.map((row) => row[2]);
+		for (let i = 0; i < n; i++) {
+			const z = dot(data[i], col2);
+			out[i] = 1 - focalLength / (focalLength + (z + cameraOffset));
+			if (out[i] < min) out[i] = min;
 		}
 		return out;
 	}
