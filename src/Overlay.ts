@@ -4,6 +4,9 @@ import { identity } from "./linalg.js";
 import type { Projection } from "./Projection.js";
 import type { Scale } from "./types.js";
 
+const POSITIVE_COLOR = "#e44c4c";
+const NEGATIVE_COLOR = "#3c3c81";
+
 /**
  * SVG overlay with draggable axis handles.
  *
@@ -18,10 +21,6 @@ import type { Scale } from "./types.js";
  * figure element with `pointer-events: none`; only the anchor `<g>`
  * groups receive pointer events.
  */
-// Faintly reddish grey for positive direction, bluish grey for negative
-const POSITIVE_COLOR = "#e44c4c";
-const NEGATIVE_COLOR = "#3c3c81";
-
 export class Overlay {
 	svg: Selection<SVGSVGElement, unknown, null, undefined>;
 	anchors?: Selection<SVGGElement, string, SVGSVGElement, unknown>;
@@ -155,6 +154,19 @@ export class Overlay {
 
 		this.anchors.call(makeDrag(this.anchors.nodes()));
 		this.#awayAnchors.call(makeDrag(this.#awayAnchors.nodes()));
+
+		// Shift-click to flip axis orientation
+		const makeFlipHandler = (nodes: SVGGElement[]) =>
+			function (this: SVGGElement, event: MouseEvent) {
+				if (!event.shiftKey) return;
+				event.preventDefault();
+				const i = nodes.indexOf(this);
+				self.#projection.flipAxis(i);
+				callbacks.onProjectionChanged();
+			};
+
+		this.anchors.on("click", makeFlipHandler(this.anchors.nodes()));
+		this.#awayAnchors.on("click", makeFlipHandler(this.#awayAnchors.nodes()));
 	}
 
 	redrawAxes(): void {

@@ -50,6 +50,16 @@ export class Projection {
 	}
 
 	/**
+	 * Flips the i-th axis by negating its row in the projection matrix.
+	 * This reverses which end of the axis faces toward vs away from the viewer.
+	 */
+	flipAxis(i: number): void {
+		for (let j = 0; j < this.#ndim; j++) {
+			this.#matrix[i][j] *= -1;
+		}
+	}
+
+	/**
 	 * Sets the i-th axis vector and re-orthogonalizes the matrix,
 	 * keeping the i-th row as the priority (unchanged after normalization).
 	 *
