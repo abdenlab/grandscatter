@@ -18,6 +18,10 @@ import type { Scale } from "./types.js";
  * figure element with `pointer-events: none`; only the anchor `<g>`
  * groups receive pointer events.
  */
+// Faintly reddish grey for positive direction, bluish grey for negative
+const POSITIVE_COLOR = "#e44c4c";
+const NEGATIVE_COLOR = "#3c3c81";
+
 export class Overlay {
 	svg: Selection<SVGSVGElement, unknown, null, undefined>;
 	anchors?: Selection<SVGGElement, string, SVGSVGElement, unknown>;
@@ -170,10 +174,16 @@ export class Overlay {
 			this.#sy(row[1]),
 		]);
 
-		this.anchors.attr(
-			"transform",
-			(_, i) => `translate(${towardPos[i][0]}, ${towardPos[i][1]})`,
-		);
+		this.anchors
+			.attr(
+				"transform",
+				(_, i) => `translate(${towardPos[i][0]}, ${towardPos[i][1]})`,
+			)
+			.select("circle")
+			.attr("fill", (_, i) =>
+				// Toward anchor is positive when sign=+1, negative when sign=-1
+				signs[i] >= 0 ? POSITIVE_COLOR : NEGATIVE_COLOR,
+			);
 
 		// Away-facing endpoints (opposite sign)
 		if (this.#awayAnchors) {
@@ -186,10 +196,16 @@ export class Overlay {
 				this.#sy(row[1]),
 			]);
 
-			this.#awayAnchors.attr(
-				"transform",
-				(_, i) => `translate(${awayPos[i][0]}, ${awayPos[i][1]})`,
-			);
+			this.#awayAnchors
+				.attr(
+					"transform",
+					(_, i) => `translate(${awayPos[i][0]}, ${awayPos[i][1]})`,
+				)
+				.select("circle")
+				.attr("fill", (_, i) =>
+					// Away anchor is negative when sign=+1, positive when sign=-1
+					signs[i] >= 0 ? NEGATIVE_COLOR : POSITIVE_COLOR,
+				);
 		}
 	}
 
