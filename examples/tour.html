@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Grand Tour - anyscatter</title>
+<style>
+	body {
+		margin: 0;
+		font-family: system-ui, sans-serif;
+		background: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 2rem;
+	}
+	h1 { margin-bottom: 0.5rem; }
+	p { color: #666; margin-top: 0; }
+	#plot {
+		width: 800px;
+		height: 800px;
+		background: white;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+	}
+	.controls {
+		margin: 1rem 0;
+		display: flex;
+		gap: 1rem;
+		align-items: center;
+	}
+	button {
+		padding: 0.5rem 1rem;
+		font-size: 1rem;
+		cursor: pointer;
+		border: 1px solid #999;
+		border-radius: 4px;
+		background: white;
+	}
+	button:hover { background: #eee; }
+	button.active { background: #333; color: white; }
+	label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: #666;
+	}
+	input[type="range"] { width: 120px; }
+</style>
+</head>
+<body>
+<h1>Grand Tour</h1>
+<p>Continuous rotation through projection space using Givens rotations.</p>
+
+<div class="controls">
+	<button id="toggle">Start Tour</button>
+	<label>
+		Speed:
+		<input type="range" id="speed" min="0.0005" max="0.005" step="0.0005" value="0.0025">
+	</label>
+</div>
+
+<div id="plot"></div>
+
+<script type="module">
+import { Scatterplot } from "@anyscatter/core";
+import { tableFromIPC } from "https://esm.sh/apache-arrow@18.1.0";
+
+const table = await tableFromIPC(fetch("eigs.arrow"));
+
+const plot = Scatterplot.create(document.getElementById("plot"), {
+	pointSize: 12,
+	scaleMode: "center",
+	axisLength: 1,
+	cameraZ: 1.5,
+	focalLength: 0.5,
+});
+plot.loadArrow(table, {
+  dimensions: ["E1", "E2", "E3", "E4", "E5"], 
+  labelColumn: "name",
+  colors: {
+    "A1": "#e23838", 
+    "A2": "#ffb900", 
+    "B0": "#5ebd3e", 
+    "B1": "#009cdf", 
+    "B4": "#973999"
+  },
+});
+const ndim = 5;
+
+// --- Grand Tour Animation ---
+
+// Apply Givens rotation in plane (i, j) by angle theta directly to matrix M
+// This is O(n) instead of O(n³) for full matrix multiply
+function applyGivensRotation(M, i, j, theta) {
+	const c = Math.cos(theta);
+	const s = Math.sin(theta);
+	for (let row = 0; row < M.length; row++) {
+		const mi = M[row][i];
+		const mj = M[row][j];
+		M[row][i] = mi * c + mj * s;
+		M[row][j] = -mi * s + mj * c;
+	}
+}
+
+let matrix = plot.getProjection();
+let touring = false;
+let animationId = null;
+let speed = 0.0025;
+
+// Build list of all rotation planes with random angular velocities
+const planes = [];
+for (let i = 0; i < ndim; i++) {
+	for (let j = i + 1; j < ndim; j++) {
+		// Each plane gets a unique irrational-ish angular velocity ratio
+		// This ensures the tour doesn't repeat and covers all directions
+		// Use range [0.5π, 1.5π] to avoid angular velocities near 0.
+		// Alternative: // (1 + Math.sqrt(2) * (i + 1) + Math.sqrt(3) * (j + 1)) / 10;
+		const omega = (Math.random() + 0.5) * Math.PI;
+		planes.push({ i, j, omega });
+	}
+}
+
+function animate() {
+	if (!touring) return;
+
+	// Apply small rotations in ALL planes simultaneously
+	// This creates smooth tumbling motion
+	for (const { i, j, omega } of planes) {
+		applyGivensRotation(matrix, i, j, speed * omega);
+	}
+
+	plot.setProjection(matrix);
+
+	animationId = requestAnimationFrame(animate);
+}
+
+// Controls
+const toggleBtn = document.getElementById("toggle");
+const speedInput = document.getElementById("speed");
+
+toggleBtn.addEventListener("click", () => {
+	touring = !touring;
+	toggleBtn.textContent = touring ? "Stop Tour" : "Start Tour";
+	toggleBtn.classList.toggle("active", touring);
+
+	if (touring) {
+		matrix = plot.getProjection(); // Sync with any manual changes
+		animate();
+	} else if (animationId) {
+		cancelAnimationFrame(animationId);
+	}
+});
+
+speedInput.addEventListener("input", (e) => {
+	speed = parseFloat(e.target.value);
+});
+
+// Pause tour when user drags an axis
+plot.on("projection", () => {
+	if (touring) {
+		// Sync matrix when user manually adjusts
+		matrix = plot.getProjection();
+	}
+});
+</script>
+</body>
+</html>

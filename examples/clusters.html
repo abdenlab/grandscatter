@@ -22,70 +22,168 @@
 		border: 1px solid #ddd;
 		border-radius: 4px;
 	}
+	#data-controls {
+		margin-bottom: 1rem;
+	}
+	#data-controls label {
+		margin-right: 0.5rem;
+	}
+	#data-controls select {
+		padding: 0.25rem 0.5rem;
+		font-size: 1rem;
+	}
+	#controls {
+		display: flex;
+		gap: 2rem;
+		margin-bottom: 1rem;
+	}
+	.control {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.control label {
+		min-width: 80px;
+	}
+	.control input[type="range"] {
+		width: 150px;
+	}
+	.control .value {
+		min-width: 40px;
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
 </style>
 </head>
 <body>
 <h1>anyscatter</h1>
 <p>Drag the axis handles to rotate the projection.</p>
+<div id="data-controls">
+	<label for="ndim">Dimensions:</label>
+	<select id="ndim">
+		<option value="2">2D</option>
+		<option value="3">3D</option>
+		<option value="4">4D</option>
+		<option value="5" selected>3D</option>
+	</select>
+</div>
+<div id="controls">
+	<div class="control">
+		<label for="cameraZ">Camera Z:</label>
+		<input type="range" id="cameraZ" min="0.5" max="10" step="0.1" value="2">
+		<span class="value" id="cameraZValue">5</span>
+	</div>
+	<div class="control">
+		<label for="focalLength">Focal Length:</label>
+		<input type="range" id="focalLength" min="0.1" max="10" step="0.1" value="5">
+		<span class="value" id="focalLengthValue">5</span>
+	</div>
+	<div class="control">
+		<label for="pointSize">Point Size:</label>
+		<input type="range" id="pointSize" min="1" max="50" step="1" value="20">
+		<span class="value" id="pointSizeValue">20</span>
+	</div>
+	<div class="control">
+		<label for="minDepthScale">Min Scale:</label>
+		<input type="range" id="minDepthScale" min="0" max="1" step="0.05" value="0.1">
+		<span class="value" id="minDepthScaleValue">0.1</span>
+	</div>
+</div>
 <div id="plot"></div>
 <script type="module">
 import { Scatterplot } from "@anyscatter/core";
 
-// Generate sample data: 3 clusters in 5D
+// Box-Muller transform for normal random numbers
 function randn() {
-	// Box-Muller transform
 	const u = 1 - Math.random();
 	const v = Math.random();
 	return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
 const N = 200; // points per cluster
-const dataDim = 5;
-const centers = [
+const centers5D = [
 	[2, 0, 0, 1, -1],  // Cluster A (red)
 	[-1, 2, -1, 0, 1],  // Cluster B (blue)
 	[0, -2, 2, -1, 0], // Cluster C (green)
 ];
-// const centers = [
-// 	[2, 0, 0],
-// 	[-1, 2, -1],
-// 	[0, -2, 2],
-// ];
 const clusterNames = ["Cluster A", "Cluster B", "Cluster C"];
 const colors = { "Cluster A": "#e41a1c", "Cluster B": "#377eb8", "Cluster C": "#4daf4a" };
 
-const columns = {};
-for (let i = 0; i < dataDim; i++) {
-	columns[`x${i + 1}`] = [];
-}
-const labels = [];
-const keys = Object.keys(columns);
-
-for (let c = 0; c < centers.length; c++) {
-	for (let i = 0; i < N; i++) {
-		for (let d = 0; d < dataDim; d++) {
-			columns[keys[d]].push(centers[c][d] + randn() * 0.6);
-		}
-		labels.push(clusterNames[c]);
+function generateData(ndim) {
+	const columns = {};
+	for (let i = 0; i < ndim; i++) {
+		columns[`x${i + 1}`] = [];
 	}
-}
+	const labels = [];
+	const keys = Object.keys(columns);
 
-// Convert to typed arrays
-for (const key of keys) {
-	columns[key] = new Float64Array(columns[key]);
+	for (let c = 0; c < centers5D.length; c++) {
+		for (let i = 0; i < N; i++) {
+			for (let d = 0; d < ndim; d++) {
+				columns[keys[d]].push(centers5D[c][d] + randn() * 0.6);
+			}
+			labels.push(clusterNames[c]);
+		}
+	}
+
+	// Convert to typed arrays
+	for (const key of keys) {
+		columns[key] = new Float64Array(columns[key]);
+	}
+
+	return { columns, labels, colors };
 }
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
-	pointSize: 8,
+	pointSize: 20,
 	scaleMode: "center",
 	axisLength: 2,
+	cameraZ: 3,
+	focalLength: 1,
 });
 
-plot.loadData({ columns, labels, colors });
+plot.loadData(generateData(3));
+// Wire up slider controls
+const cameraZInput = document.getElementById("cameraZ");
+const cameraZValue = document.getElementById("cameraZValue");
+const focalLengthInput = document.getElementById("focalLength");
+const focalLengthValue = document.getElementById("focalLengthValue");
 
-// plot.on("projection", (e) => {
-// 	console.log("projection changed", e.matrix);
-// });
+cameraZInput.addEventListener("input", () => {
+	const val = parseFloat(cameraZInput.value);
+	plot.cameraZ = val;
+	cameraZValue.textContent = val;
+});
+
+focalLengthInput.addEventListener("input", () => {
+	const val = parseFloat(focalLengthInput.value);
+	plot.focalLength = val;
+	focalLengthValue.textContent = val;
+});
+
+const pointSizeInput = document.getElementById("pointSize");
+const pointSizeValue = document.getElementById("pointSizeValue");
+
+pointSizeInput.addEventListener("input", () => {
+	const val = parseFloat(pointSizeInput.value);
+	plot.pointSize = val;
+	pointSizeValue.textContent = val;
+});
+
+const minDepthScaleInput = document.getElementById("minDepthScale");
+const minDepthScaleValue = document.getElementById("minDepthScaleValue");
+
+minDepthScaleInput.addEventListener("input", () => {
+	const val = parseFloat(minDepthScaleInput.value);
+	plot.minDepthScale = val;
+	minDepthScaleValue.textContent = val;
+});
+
+const ndimSelect = document.getElementById("ndim");
+ndimSelect.addEventListener("change", () => {
+	const val = parseInt(ndimSelect.value, 10);
+	plot.loadData(generateData(val));
+});
 </script>
 </body>
 </html>
