@@ -8,6 +8,8 @@ import { columnMax, columnMaxAbs, columnMin, identity, neg } from "./linalg.js";
 import { Overlay } from "./Overlay.js";
 import { Projection } from "./Projection.js";
 import type {
+	ArrowLoadOptions,
+	ArrowTable,
 	Margin,
 	Scale,
 	ScatterData,
@@ -117,7 +119,7 @@ export function updateScaleSpan(
  * and repositions the SVG axis handles.
  *
  * Create via the static factory {@link Scatterplot.create}, then call
- * {@link setData} to load data and begin rendering.
+ * {@link loadData} to load data and begin rendering.
  */
 export class Scatterplot {
 	#canvas: HTMLCanvasElement;
@@ -228,7 +230,7 @@ export class Scatterplot {
 		resizeCanvas(this.#canvas, this.#opts.pixelRatio);
 		this.#webgl = new WebGLRenderer(this.#canvas, this.#opts.background);
 
-		// Initialize projection (placeholder ndim=2, will be reset on setData)
+		// Initialize projection (placeholder ndim=2, will be reset on loadData)
 		this.#projection = new Projection(2);
 
 		// Initialize overlay
@@ -256,9 +258,9 @@ export class Scatterplot {
 	}
 
 	/**
-	 * Load data into the scatterplot.
+	 * Load data into the scatterplot from a plain object.
 	 */
-	setData(data: ScatterData): void {
+	loadData(data: ScatterData): void {
 		this.#data = this.#parseData(data);
 
 		const { npoint, ndim, dimLabels, legendEntries } = this.#data;
@@ -290,6 +292,66 @@ export class Scatterplot {
 			this.#playing = true;
 		}
 		this.#markDirty();
+	}
+
+	/**
+	 * Load data into the scatterplot from an Arrow table.
+	 *
+	 * @param table - An Arrow table (from apache-arrow or compatible library)
+	 * @param options - Options specifying which columns to use
+	 */
+	loadArrow(table: ArrowTable, options: ArrowLoadOptions = {}): void {
+		// Arrow type IDs for numeric types (Int, Float, Decimal)
+		const NUMERIC_TYPE_IDS = new Set([2, 3, 7]); // Int=2, Float=3, Decimal=7
+
+		const allFields = table.schema.fields;
+		const numericFields = allFields.filter((f) =>
+			NUMERIC_TYPE_IDS.has(f.type.typeId),
+		);
+
+		// Determine dimension columns
+		const dimNames = options.dimensions ?? numericFields.map((f) => f.name);
+
+		// Build columns object
+		const columns: Record<string, ArrayLike<number>> = {};
+		for (const name of dimNames) {
+			const col = table.getChild(name);
+			if (!col) {
+				throw new Error(`Column "${name}" not found in Arrow table`);
+			}
+			columns[name] = col.toArray() as ArrayLike<number>;
+		}
+
+		// Extract labels if specified
+		let labels: ArrayLike<string | number> | undefined;
+		if (options.labelColumn) {
+			const col = table.getChild(options.labelColumn);
+			if (!col) {
+				throw new Error(
+					`Label column "${options.labelColumn}" not found in Arrow table`,
+				);
+			}
+			labels = col.toArray() as ArrayLike<string | number>;
+		}
+
+		// Extract alphas if specified
+		let alphas: ArrayLike<number> | undefined;
+		if (options.alphaColumn) {
+			const col = table.getChild(options.alphaColumn);
+			if (!col) {
+				throw new Error(
+					`Alpha column "${options.alphaColumn}" not found in Arrow table`,
+				);
+			}
+			alphas = col.toArray() as ArrayLike<number>;
+		}
+
+		this.loadData({
+			columns,
+			labels,
+			colors: options.colors,
+			alphas,
+		});
 	}
 
 	#parseData(data: ScatterData): InternalData {
