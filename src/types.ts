@@ -7,8 +7,6 @@ export interface ScatterData {
 	labels?: ArrayLike<string | number>;
 	/** Optional mapping from label values to hex color strings. */
 	colors?: Record<string, string>;
-	/** Optional per-point alpha (0-255). Defaults to 255. */
-	alphas?: ArrayLike<number>;
 }
 
 /**
@@ -21,8 +19,6 @@ export interface ArrowLoadOptions {
 	labelColumn?: string;
 	/** Optional mapping from label values to hex color strings. */
 	colors?: Record<string, string>;
-	/** Column name containing per-point alpha values (0-255). */
-	alphaColumn?: string;
 }
 
 /**
@@ -68,6 +64,12 @@ export interface ScatterplotOptions {
 	pixelRatio?: number;
 	/** Sort points back-to-front by depth for correct occlusion. Default: true */
 	depthSort?: boolean;
+	/** Camera position along the depth axis. Points with z > cameraZ are hidden. Default: 5 */
+	cameraZ?: number;
+	/** Focal length controlling perspective strength. Shorter = stronger perspective. Default: 1 */
+	focalLength?: number;
+	/** Minimum depth scaling factor for farthest points. Default: 0.1 */
+	minDepthScale?: number;
 }
 
 export interface ScatterplotEvents {

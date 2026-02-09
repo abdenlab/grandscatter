@@ -24,7 +24,6 @@ interface InternalData {
 	ndim: number;
 	dimLabels: string[];
 	labelIndices: number[];
-	alphas: number[];
 	hexColors: string[];
 	rgbTuples: [number, number, number][];
 	legendEntries: [string, string][];
@@ -160,6 +159,9 @@ export class Scatterplot {
 			| "axisLength"
 			| "depthSort"
 			| "legendWidth"
+			| "cameraZ"
+			| "focalLength"
+			| "minDepthScale"
 		>
 	> & {
 		margin: Margin;
@@ -184,6 +186,9 @@ export class Scatterplot {
 			axisLength: opts.axisLength ?? 1,
 			pixelRatio: opts.pixelRatio,
 			depthSort: opts.depthSort ?? true,
+			cameraZ: opts.cameraZ ?? 5,
+			focalLength: opts.focalLength ?? 1,
+			minDepthScale: opts.minDepthScale ?? 0.1,
 		};
 
 		// Create wrapper: [figure (canvas + overlay)] + [legend]
@@ -334,23 +339,10 @@ export class Scatterplot {
 			labels = col.toArray() as ArrayLike<string | number>;
 		}
 
-		// Extract alphas if specified
-		let alphas: ArrayLike<number> | undefined;
-		if (options.alphaColumn) {
-			const col = table.getChild(options.alphaColumn);
-			if (!col) {
-				throw new Error(
-					`Alpha column "${options.alphaColumn}" not found in Arrow table`,
-				);
-			}
-			alphas = col.toArray() as ArrayLike<number>;
-		}
-
 		this.loadData({
 			columns,
 			labels,
 			colors: options.colors,
-			alphas,
 		});
 	}
 
@@ -400,11 +392,6 @@ export class Scatterplot {
 			labelIndices = new Array(npoint).fill(0);
 		}
 
-		const alphas = new Array(npoint).fill(255);
-		if (data.alphas) {
-			for (let i = 0; i < npoint; i++) alphas[i] = data.alphas[i];
-		}
-
 		const rgbTuples: [number, number, number][] = hexColors.map((c) => {
 			const parsed = rgb(c)!;
 			return [parsed.r, parsed.g, parsed.b];
@@ -416,7 +403,6 @@ export class Scatterplot {
 			ndim,
 			dimLabels,
 			labelIndices,
-			alphas,
 			hexColors,
 			rgbTuples,
 			legendEntries,
@@ -549,6 +535,46 @@ export class Scatterplot {
 		return this.#data?.dimLabels ?? [];
 	}
 
+	/** Camera position along the depth axis. Points with z > cameraZ are hidden. */
+	get cameraZ(): number {
+		return this.#opts.cameraZ;
+	}
+
+	set cameraZ(value: number) {
+		this.#opts.cameraZ = value;
+		this.#markDirty();
+	}
+
+	/** Focal length controlling perspective strength. Shorter = stronger perspective. */
+	get focalLength(): number {
+		return this.#opts.focalLength;
+	}
+
+	set focalLength(value: number) {
+		this.#opts.focalLength = value;
+		this.#markDirty();
+	}
+
+	/** Point diameter in CSS pixels. */
+	get pointSize(): number {
+		return this.#opts.pointSize;
+	}
+
+	set pointSize(value: number) {
+		this.#opts.pointSize = value;
+		this.#markDirty();
+	}
+
+	/** Minimum depth scaling factor for farthest points. */
+	get minDepthScale(): number {
+		return this.#opts.minDepthScale;
+	}
+
+	set minDepthScale(value: number) {
+		this.#opts.minDepthScale = value;
+		this.#markDirty();
+	}
+
 	/** Subscribe to events. Returns an unsubscribe function. */
 	on<K extends keyof ScatterplotEvents & string>(
 		event: K,
@@ -571,8 +597,7 @@ export class Scatterplot {
 	#render(): void {
 		if (!this.#data) return;
 
-		const { matrix, npoint, ndim, labelIndices, alphas, rgbTuples } =
-			this.#data;
+		const { matrix, npoint, ndim, labelIndices, rgbTuples } = this.#data;
 
 		// Project data to 2D
 		const projected = this.#projection.projectXY(matrix);
@@ -613,15 +638,23 @@ export class Scatterplot {
 		const vis = this.#visibleCategories;
 
 		// Compute per-point sizes scaled by depth proximity
+		const { cameraZ, focalLength, minDepthScale } = this.#opts;
 		const dpr = this.#opts.pixelRatio ?? window.devicePixelRatio;
 		const baseSize = this.#opts.pointSize * dpr;
-		const prox = this.#projection.proximityPerspective(matrix);
+		const zcoords = this.#projection.projectZ(matrix);
+		const depthScale = this.#projection.depthScale(
+			matrix,
+			cameraZ,
+			focalLength,
+			minDepthScale,
+		);
+		const alphas = zcoords.map((z) => (z > cameraZ ? 0 : 255));
 
 		// Sort points back-to-front by proximity (farthest first)
 		const order = this.#order;
 		for (let i = 0; i < npoint; i++) order[i] = i;
 		if (this.#opts.depthSort) {
-			order.sort((a, b) => prox[a] - prox[b]);
+			order.sort((a, b) => zcoords[a] - zcoords[b]);
 		}
 
 		// Write data points into flat buffers (in sorted order)
@@ -629,12 +662,15 @@ export class Scatterplot {
 			const i = order[si];
 			pos[si * 2] = sx(projected[i][0]);
 			pos[si * 2 + 1] = sy(projected[i][1]);
-			siz[si] = baseSize * prox[i];
+			siz[si] = baseSize * depthScale[i];
 			const catIdx = labelIndices[i];
 			const c4 = si * 4;
 			col[c4] = rgbTuples[catIdx][0];
 			col[c4 + 1] = rgbTuples[catIdx][1];
 			col[c4 + 2] = rgbTuples[catIdx][2];
+			// Set the point's alpha (opacity) to its stored alpha value if
+			// there's no visibility filter active or the point's category is
+			// in the visible set; otherwise set the alpha to 0 (fully transparent).
 			col[c4 + 3] = vis === null || vis.has(catIdx) ? alphas[i] : 0;
 		}
 

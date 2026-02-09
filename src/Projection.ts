@@ -120,57 +120,32 @@ export class Projection {
 	}
 
 	/**
-	 * Compute per-point proximity from the viewer, normalized so the
-	 * closest point is 1 and the farthest is `min`. For ndim < 3 (no
-	 * depth axis), returns all 1s.
+	 * Compute per-point perspective scaling factors based on depth, where
+	 * closer points are scaled up and farther points are scaled down.
+	 *
+	 * The camera is placed at position `cameraZ` looking towards the negative
+	 * z direction. It has a focal length that determines how strongly distance
+	 * affects scaling. A shorter focal length means a "zoom-in" effect with
+	 * stronger perspective scaling, while a longer focal length means a
+	 * "zoom-out" effect with weaker perspective scaling.
+	 *
+	 * Depth factors are clamped to a minimum value `min` to prevent far away
+	 * points from disappearing. Points "behind" the camera (z > cameraZ) are
+	 * scaled as if they were at the camera position (depth factor = 1).
+	 *
+	 * For ndim < 3 (no depth axis), returns all 1s.
 	 *
 	 * @param data - npoint x ndim matrix
-	 * @param min  - proximity value for the farthest point (default 0.1)
+	 * @param cameraZ - position of the camera along the depth axis
+	 * @param focalLength - controls perspective strength
+	 * @param min - minimum scaling factor for farthest points
 	 * @returns Float64Array of length npoint, values in [min, 1]
 	 */
-	proximity(data: number[][], min = 0.1): Float64Array {
-		const n = data.length;
-		const out = new Float64Array(n);
-		if (this.#ndim < 3) {
-			out.fill(1);
-			return out;
-		}
-		const col2 = this.#matrix.map((row) => row[2]);
-		let zMin = Infinity;
-		let zMax = -Infinity;
-		for (let i = 0; i < n; i++) {
-			const z = dot(data[i], col2);
-			out[i] = z;
-			if (z < zMin) zMin = z;
-			if (z > zMax) zMax = z;
-		}
-		const range = zMax - zMin;
-		if (range === 0) {
-			out.fill(1);
-		} else {
-			for (let i = 0; i < n; i++) {
-				out[i] = min + ((out[i] - zMin) / range) * (1 - min);
-			}
-		}
-		return out;
-	}
-
-	/**
-	 * Compute per-point perspective scaling factors based on depth, where
-	 * closer points are scaled up and farther points are scaled down. The
-	 * `focalLength` parameter controls how quickly the scaling changes with
-	 * depth. For ndim < 3 (no depth axis), returns all 1s.
-	 *
-	 * @param data - npoint x ndim matrix
-	 * @param focalLength - controls perspective strength (default 1)
-	 * @param min - minimum scaling factor for farthest points (default 0.1)
-	 * @returns Float64Array of length npoint, values in [min, 1], where 1 is
-	 * closest and min is farthest
-	 */
-	proximityPerspective(
+	depthScale(
 		data: number[][],
-		focalLength = 2,
-		min = 0.2,
+		cameraZ = 0.5,
+		focalLength = 1,
+		min = 0.1,
 	): Float64Array {
 		const n = data.length;
 		const out = new Float64Array(n);
@@ -178,20 +153,15 @@ export class Projection {
 			out.fill(1);
 			return out;
 		}
-		let zMin = Infinity;
-		for (let i = 0; i < n; i++) {
-			const z = dot(
-				data[i],
-				this.#matrix.map((row) => row[2]),
-			);
-			if (z < zMin) zMin = z;
-		}
-		const cameraOffset = Math.abs(zMin) + 0.1;
+
+		// Project the data onto the z-axis (column 2) and get depth values
+		// relative to the camera. Then apply perspective scaling formula.
 		const col2 = this.#matrix.map((row) => row[2]);
 		for (let i = 0; i < n; i++) {
 			const z = dot(data[i], col2);
-			out[i] = 1 - focalLength / (focalLength + (z + cameraOffset));
+			out[i] = focalLength / (focalLength + (cameraZ - z));
 			if (out[i] < min) out[i] = min;
+			if (out[i] > 1) out[i] = 1;
 		}
 		return out;
 	}
