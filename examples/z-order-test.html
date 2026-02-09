@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Z-Order Test</title>
+<style>
+	body {
+		margin: 0;
+		font-family: system-ui, sans-serif;
+		background: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 2rem;
+	}
+	h1 { margin-bottom: 0.5rem; }
+	p { color: #666; margin-top: 0; max-width: 600px; }
+	#plot {
+		width: 520px;
+		height: 520px;
+		background: white;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+	}
+	#info {
+		font-family: monospace;
+		white-space: pre;
+		background: #222;
+		color: #0f0;
+		padding: 1rem;
+		margin-top: 1rem;
+		border-radius: 4px;
+		width: 520px;
+		box-sizing: border-box;
+		font-size: 13px;
+	}
+</style>
+</head>
+<body>
+<h1>Z-Order Test</h1>
+<p>
+	Two points at the same (x,y) position but different z.
+	<b>Blue (z=+5)</b> should fully occlude <b>Red (z=-5)</b>.
+	Drag axes and check the info panel below.
+</p>
+<div id="plot"></div>
+<div id="info">loading...</div>
+<script type="module">
+import { Scatterplot } from "@anyscatter/core";
+
+// Minimal dataset: 2 points in 3D at same (x,y), different z
+const columns = {
+	x: new Float64Array([0, 0]),
+	y: new Float64Array([0, 0]),
+	z: new Float64Array([-5, 5]),
+};
+const labels = ["Red (z=-5)", "Blue (z=+5)"];
+const colors = {
+	"Red (z=-5)": "#e41a1c",
+	"Blue (z=+5)": "#377eb8",
+};
+
+const plot = Scatterplot.create(document.getElementById("plot"), {
+	pointSize: 40,
+	scaleMode: "center",
+	axisLength: 2,
+});
+
+plot.loadData({ columns, labels, colors });
+
+// Set identity projection so z-column is [0,0,1]
+plot.setProjection([
+	[1, 0, 0],
+	[0, 1, 0],
+	[0, 0, 1],
+]);
+
+const info = document.getElementById("info");
+
+function dot(a, b) {
+	return a.reduce((s, v, i) => s + v * b[i], 0);
+}
+
+function updateInfo() {
+	const M = plot.getProjection();
+	const col2 = M.map(row => row[2]);
+
+	// z-values for each point: dot(data, col2)
+	const data = [[0, 0, -5], [0, 0, 5]];
+	const zRed = dot(data[0], col2);
+	const zBlue = dot(data[1], col2);
+
+	// determinant (3x3)
+	const det =
+		M[0][0] * (M[1][1]*M[2][2] - M[1][2]*M[2][1]) -
+		M[0][1] * (M[1][0]*M[2][2] - M[1][2]*M[2][0]) +
+		M[0][2] * (M[1][0]*M[2][1] - M[1][1]*M[2][0]);
+
+	const sign = det >= 0 ? 1 : -1;
+	const correctedZRed = sign * zRed;
+	const correctedZBlue = sign * zBlue;
+
+	const topColor = correctedZBlue > correctedZRed ? "BLUE" : "RED";
+
+	info.textContent =
+`col2:  [${col2.map(v => v.toFixed(3)).join(", ")}]
+det:   ${det.toFixed(4)}
+sign:  ${sign}
+z_red: ${zRed.toFixed(3)}  (corrected: ${correctedZRed.toFixed(3)})
+z_blu: ${zBlue.toFixed(3)}  (corrected: ${correctedZBlue.toFixed(3)})
+sort → ${topColor} on top (drawn last)`;
+}
+
+plot.on("projection", updateInfo);
+setTimeout(updateInfo, 100);
+</script>
+</body>
+</html>

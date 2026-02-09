@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>anyscatter examples</title>
+<style>
+	body {
+		margin: 0;
+		font-family: system-ui, sans-serif;
+		background: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 2rem;
+	}
+	h1 { margin-bottom: 0.5rem; }
+	p { color: #666; margin-top: 0; }
+	.examples {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-top: 2rem;
+		width: 100%;
+		max-width: 500px;
+	}
+	.example-card {
+		background: white;
+		border: 1px solid #ddd;
+		border-radius: 8px;
+		padding: 1.5rem;
+		text-decoration: none;
+		color: inherit;
+		transition: box-shadow 0.2s, border-color 0.2s;
+	}
+	.example-card:hover {
+		border-color: #999;
+		box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+	}
+	.example-card h2 {
+		margin: 0 0 0.5rem 0;
+		font-size: 1.2rem;
+		color: #333;
+	}
+	.example-card p {
+		margin: 0;
+		font-size: 0.9rem;
+	}
+</style>
+</head>
+<body>
+<h1>anyscatter</h1>
+<p>Interactive multi-dimensional scatterplot visualization</p>
+
+<div class="examples">
+	<a class="example-card" href="clusters.html">
+		<h2>5D Clusters</h2>
+		<p>Three Gaussian clusters in 5-dimensional space with draggable projection axes.</p>
+	</a>
+
+	<a class="example-card" href="eigs.html">
+		<h2>HCT116 eigenvectors (Arrow)</h2>
+		<p>Loads data from an Apache Arrow file. Demonstrates loadArrow() API.</p>
+	</a>
+
+	<a class="example-card" href="z-order-test.html">
+		<h2>Z-Order Test</h2>
+		<p>Verifies depth sorting with colored layers at different z-positions.</p>
+	</a>
+</div>
+</body>
+</html>

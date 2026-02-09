@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HCT116 eigenvectors - anyscatter</title>
+<style>
+	body {
+		margin: 0;
+		font-family: system-ui, sans-serif;
+		background: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 2rem;
+	}
+	h1 { margin-bottom: 0.5rem; }
+	p { color: #666; margin-top: 0; }
+	#plot {
+		width: 1028px;
+		height: 1028px;
+		background: white;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+	}
+</style>
+</head>
+<body>
+<h1>anyscatter</h1>
+<p>Drag the axis handles to rotate the projection.</p>
+<div id="plot"></div>
+<script type="module">
+import { Scatterplot } from "@anyscatter/core";
+import { tableFromIPC } from "https://esm.sh/apache-arrow@18.1.0";
+
+const table = await tableFromIPC(fetch("eigs.arrow"));
+
+const plot = Scatterplot.create(document.getElementById("plot"), {
+	pointSize: 12,
+	scaleMode: "center",
+	axisLength: 1,
+});
+plot.loadArrow(table, {
+  dimensions: ["E1", "E2", "E3", "E4", "E5"], 
+  labelColumn: "name",
+  colors: {
+    "A1": "#e23838", 
+    "A2": "#ffb900", 
+    "B0": "#5ebd3e", 
+    "B1": "#009cdf", 
+    "B4": "#973999"
+  },
+});
+</script>
+</body>
+</html>

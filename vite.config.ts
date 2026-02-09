@@ -8,6 +8,6 @@ export default defineConfig({
 		},
 	},
 	server: {
-		open: "/example/",
+		open: "/examples/",
 	},
 });
