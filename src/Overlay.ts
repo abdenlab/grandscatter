@@ -8,40 +8,37 @@ const POSITIVE_COLOR = "#e44c4c";
 const NEGATIVE_COLOR = "#3c3c81";
 
 /**
- * SVG overlay with draggable axis handles.
+ * SVG overlay of draggable axis handles.
  *
  * Owns the drag-to-projection interaction: on drag, converts pixel deltas
  * to data-space deltas via scale inverses, updates the Projection directly
  * via {@link Projection.setAxis}, and notifies the parent via the
  * `onProjectionChanged` callback. Also positions axis labels at each handle.
  *
- * Call {@link initAxes} after construction to create the handles, and
- * {@link redrawAxes} each frame to reposition them to match the current
+ * Call {@link init} after construction to create the handles, and
+ * {@link redraw} each frame to reposition them to match the current
  * projection. The overlay SVG is absolutely positioned over the parent
  * figure element with `pointer-events: none`; only the anchor `<g>`
  * groups receive pointer events.
  */
 export class Overlay {
 	svg: Selection<SVGSVGElement, unknown, null, undefined>;
-	anchors?: Selection<SVGGElement, string, SVGSVGElement, unknown>;
-	#awayAnchors?: Selection<SVGGElement, string, SVGSVGElement, unknown>;
+	towardsAnchors?: Selection<SVGGElement, string, SVGSVGElement, unknown>;
+	awayAnchors?: Selection<SVGGElement, string, SVGSVGElement, unknown>;
 	#projection: Projection;
 	#sx: Scale;
 	#sy: Scale;
 	#anchorRadius = 8;
-	#axisLength: number;
 
 	constructor(
 		figure: Selection<HTMLElement, unknown, null, undefined>,
 		projection: Projection,
 		sx: Scale,
 		sy: Scale,
-		axisLength = 1,
 	) {
 		this.#projection = projection;
 		this.#sx = sx;
 		this.#sy = sy;
-		this.#axisLength = axisLength;
 
 		this.svg = figure
 			.insert("svg", ":first-child")
@@ -72,11 +69,11 @@ export class Overlay {
 			7,
 			Math.min(10, Math.min(parent.clientWidth, parent.clientHeight) / 50),
 		);
-		this.anchors?.select("circle").attr("r", this.#anchorRadius);
-		this.#awayAnchors?.select("circle").attr("r", this.#anchorRadius / 2);
+		this.towardsAnchors?.select("circle").attr("r", this.#anchorRadius);
+		this.awayAnchors?.select("circle").attr("r", this.#anchorRadius / 2);
 	}
 
-	initAxes(
+	init(
 		dimLabels: string[],
 		callbacks: {
 			onDragStart?: () => void;
@@ -87,7 +84,7 @@ export class Overlay {
 		const origin = `translate(${this.#sx(0)}, ${this.#sy(0)})`;
 
 		// Toward-facing anchors (with labels)
-		this.anchors = this.svg
+		this.towardsAnchors = this.svg
 			.selectAll<SVGGElement, string>(".anyscatter-anchor")
 			.data(dimLabels)
 			.enter()
@@ -96,7 +93,7 @@ export class Overlay {
 			.style("pointer-events", "all")
 			.attr("transform", origin);
 
-		this.anchors
+		this.towardsAnchors
 			.append("circle")
 			.attr("r", this.#anchorRadius)
 			.attr("opacity", 0.8)
@@ -104,7 +101,8 @@ export class Overlay {
 			.attr("fill", "gray")
 			.style("cursor", "pointer");
 
-		this.anchors
+		// Toward-facing anchor labels
+		this.towardsAnchors
 			.append("text")
 			.attr("text-anchor", "middle")
 			.attr("dy", "-0.8em")
@@ -114,7 +112,7 @@ export class Overlay {
 			.text((label) => label);
 
 		// Away-facing anchors (no labels)
-		this.#awayAnchors = this.svg
+		this.awayAnchors = this.svg
 			.selectAll<SVGGElement, string>(".anyscatter-anchor-away")
 			.data(dimLabels)
 			.enter()
@@ -123,7 +121,7 @@ export class Overlay {
 			.style("pointer-events", "all")
 			.attr("transform", origin);
 
-		this.#awayAnchors
+		this.awayAnchors
 			.append("circle")
 			.attr("r", this.#anchorRadius / 2)
 			.attr("opacity", 0.8)
@@ -152,8 +150,8 @@ export class Overlay {
 					callbacks.onDragEnd?.();
 				});
 
-		this.anchors.call(makeDrag(this.anchors.nodes()));
-		this.#awayAnchors.call(makeDrag(this.#awayAnchors.nodes()));
+		this.towardsAnchors.call(makeDrag(this.towardsAnchors.nodes()));
+		this.awayAnchors.call(makeDrag(this.awayAnchors.nodes()));
 
 		// Shift-click to flip axis orientation
 		const makeFlipHandler = (nodes: SVGGElement[]) =>
@@ -165,15 +163,18 @@ export class Overlay {
 				callbacks.onProjectionChanged();
 			};
 
-		this.anchors.on("click", makeFlipHandler(this.anchors.nodes()));
-		this.#awayAnchors.on("click", makeFlipHandler(this.#awayAnchors.nodes()));
+		this.towardsAnchors.on(
+			"click",
+			makeFlipHandler(this.towardsAnchors.nodes()),
+		);
+		this.awayAnchors.on("click", makeFlipHandler(this.awayAnchors.nodes()));
 	}
 
-	redrawAxes(): void {
-		if (!this.anchors) return;
+	redraw(axisLength: number): void {
+		if (!this.towardsAnchors || !this.awayAnchors) return;
 		const ndim = this.#projection.ndim;
 
-		const r = this.#axisLength;
+		const r = axisLength;
 		const signs = this.#projection.axisZSigns();
 
 		// Toward-facing endpoints (flipped by z-sign)
@@ -186,7 +187,7 @@ export class Overlay {
 			this.#sy(row[1]),
 		]);
 
-		this.anchors
+		this.towardsAnchors
 			.attr(
 				"transform",
 				(_, i) => `translate(${towardPos[i][0]}, ${towardPos[i][1]})`,
@@ -198,27 +199,25 @@ export class Overlay {
 			);
 
 		// Away-facing endpoints (opposite sign)
-		if (this.#awayAnchors) {
-			const awayData = identity(ndim).map((row, i) =>
-				row.map((v) => v * r * -signs[i]),
-			);
-			const awayProjected = this.#projection.projectXY(awayData);
-			const awayPos = awayProjected.map((row) => [
-				this.#sx(row[0]),
-				this.#sy(row[1]),
-			]);
+		const awayData = identity(ndim).map((row, i) =>
+			row.map((v) => v * r * -signs[i]),
+		);
+		const awayProjected = this.#projection.projectXY(awayData);
+		const awayPos = awayProjected.map((row) => [
+			this.#sx(row[0]),
+			this.#sy(row[1]),
+		]);
 
-			this.#awayAnchors
-				.attr(
-					"transform",
-					(_, i) => `translate(${awayPos[i][0]}, ${awayPos[i][1]})`,
-				)
-				.select("circle")
-				.attr("fill", (_, i) =>
-					// Away anchor is negative when sign=+1, positive when sign=-1
-					signs[i] >= 0 ? NEGATIVE_COLOR : POSITIVE_COLOR,
-				);
-		}
+		this.awayAnchors
+			.attr(
+				"transform",
+				(_, i) => `translate(${awayPos[i][0]}, ${awayPos[i][1]})`,
+			)
+			.select("circle")
+			.attr("fill", (_, i) =>
+				// Away anchor is negative when sign=+1, positive when sign=-1
+				signs[i] >= 0 ? NEGATIVE_COLOR : POSITIVE_COLOR,
+			);
 	}
 
 	destroy(): void {

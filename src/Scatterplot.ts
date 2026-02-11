@@ -4,19 +4,60 @@ import { schemeCategory10 } from "d3-scale-chromatic";
 import { select } from "d3-selection";
 import { Emitter } from "./Emitter.js";
 import { Legend } from "./Legend.js";
-import { columnMax, columnMaxAbs, columnMin, identity, neg } from "./linalg.js";
+import { columnMaxAbs, identity, neg } from "./linalg.js";
 import { Overlay } from "./Overlay.js";
 import { Projection } from "./Projection.js";
-import type {
-	ArrowLoadOptions,
-	ArrowTable,
-	Margin,
-	Scale,
-	ScatterData,
-	ScatterplotEvents,
-	ScatterplotOptions,
-} from "./types.js";
+import type { ArrowLoadOptions, ArrowTable, Scale } from "./types.js";
 import { WebGLRenderer } from "./WebGLRenderer.js";
+
+export interface ScatterOptions {
+	/** Position of axis handles in data coordinates. Default: 1 */
+	axisLength?: number;
+	/** Point diameter in CSS pixels. Default: 6 */
+	pointSize?: number;
+	/** Minimum depth scaling factor for farthest points. Default: 0.1 */
+	minDepthScale?: number;
+	/** Camera position along the depth axis. Points with z > cameraZ are hidden. Default: 5 */
+	cameraZ?: number;
+	/** Focal length controlling perspective strength. Shorter = stronger perspective. Default: 1 */
+	focalLength?: number;
+	/** Sort points back-to-front by depth for correct occlusion. Default: true */
+	depthSort?: boolean;
+	/** Show/hide axis labels on handles. Default: true */
+	showAxisLabels?: boolean;
+	/** Show/hide the legend. Default: true if labels are provided. */
+	showLegend?: boolean;
+	/** Legend width in CSS pixels. Default: 100. Ignored if showLegend is false. */
+	legendWidth?: number;
+	/** Canvas width in CSS pixels. Default: fills container */
+	width?: number;
+	/** Canvas height in CSS pixels. Default: fills container */
+	height?: number;
+	/** Margin in CSS pixels. */
+	margin?: Partial<Margin>;
+	/** Device pixel ratio override. Default: window.devicePixelRatio */
+	pixelRatio?: number;
+	/** Canvas background color as CSS color string. Default: "transparent" */
+	background?: string;
+}
+
+export interface ScatterData {
+	/** Named columns of numeric data, one per dimension/axis. */
+	columns: Record<string, ArrayLike<number>>;
+	/** Optional categorical labels per point (for coloring/legend). */
+	labels?: ArrayLike<string | number>;
+	/** Optional mapping from label values to hex color strings. */
+	colors?: Record<string, string>;
+}
+
+export interface ScatterEvents {
+	/** Fired after any projection matrix change (drag, setProjection, etc.) */
+	projection: { matrix: number[][] };
+	/** Fired when legend selection changes. */
+	select: { labels: Set<string | number> };
+	/** Fired on resize. */
+	resize: { width: number; height: number };
+}
 
 interface InternalData {
 	matrix: number[][];
@@ -29,7 +70,37 @@ interface InternalData {
 	legendEntries: [string, string][];
 }
 
+interface InternalOptions {
+	pointSize: number;
+	background: [number, number, number, number];
+	showAxisLabels: boolean;
+	axisLength: number;
+	depthSort: boolean;
+	legendWidth: number;
+	cameraZ: number;
+	focalLength: number;
+	minDepthScale: number;
+	margin: Margin;
+	showLegend?: boolean;
+	pixelRatio?: number;
+	width?: number;
+	height?: number;
+}
+
+interface Margin {
+	top: number;
+	right: number;
+	bottom: number;
+	left: number;
+}
+
 const DEFAULT_MARGIN: Margin = { top: 22, right: 32, bottom: 40, left: 32 };
+
+/** Parse a CSS color string to [r, g, b, a] with values in 0-1 range. */
+function parseColor(color: string): [number, number, number, number] {
+	const parsed = rgb(color);
+	return [parsed.r / 255, parsed.g / 255, parsed.b / 255, parsed.opacity];
+}
 
 /** Resize the canvas drawing buffer to match physical display pixels. */
 function resizeCanvas(canvas: HTMLCanvasElement, pixelRatio?: number): void {
@@ -75,37 +146,6 @@ export function updateScaleCenter(
 }
 
 /**
- * Update scales to fit the data range (non-symmetric domains).
- */
-export function updateScaleSpan(
-	points: number[][],
-	canvas: HTMLCanvasElement,
-	sx: Scale,
-	sy: Scale,
-	scaleFactor = 1.0,
-	margin: Margin = DEFAULT_MARGIN,
-): void {
-	const vmin = columnMin(points);
-	const vmax = columnMax(points);
-
-	const xDataRange = vmax[0] - vmin[0];
-	const yDataRange = vmax[1] - vmin[1];
-
-	const yMiddle = (canvas.clientHeight - margin.bottom + margin.top) / 2;
-	const yRadius0 = (canvas.clientHeight - margin.bottom - margin.top) / 2;
-	const xMiddle = (canvas.clientWidth - margin.right + margin.left) / 2;
-	const xRadius0 = (canvas.clientWidth - margin.right - margin.left) / 2;
-
-	const xRadius =
-		Math.min(xRadius0, (yRadius0 / yDataRange) * xDataRange) * scaleFactor;
-	const yRadius =
-		Math.min(yRadius0, (xRadius0 / xDataRange) * yDataRange) * scaleFactor;
-
-	sx.domain([vmin[0], vmax[0]]).range([xMiddle - xRadius, xMiddle + xRadius]);
-	sy.domain([vmin[1], vmax[1]]).range([yMiddle + yRadius, yMiddle - yRadius]);
-}
-
-/**
  * Interactive multidimensional scatterplot.
  *
  * Orchestrates a {@link Projection}, {@link WebGLRenderer}, {@link Overlay},
@@ -121,65 +161,47 @@ export function updateScaleSpan(
  * {@link loadData} to load data and begin rendering.
  */
 export class Scatterplot {
-	#canvas: HTMLCanvasElement;
-	#figure: ReturnType<typeof select<HTMLElement, unknown>>;
-	#webgl: WebGLRenderer;
-	#overlay: Overlay;
-	#projection!: Projection;
-	#legend?: Legend;
+	#opts: InternalOptions;
 	#data?: InternalData;
-	#emitter = new Emitter<ScatterplotEvents>();
+	#projection!: Projection;
 
+	// Container (figure canvas + legend)
+	#figureWrapper: HTMLElement;
 	#resizeObserver: ResizeObserver;
-	#visibleCategories: Set<number> | null = null;
+
+	// Axes overlay
+	#overlay: Overlay;
+	#figure: ReturnType<typeof select<HTMLElement, unknown>>;
+	#sx: Scale;
+	#sy: Scale;
+
+	// Point rendering
+	#webgl: WebGLRenderer;
+	#canvas: HTMLCanvasElement;
 	#glPositions = new Float32Array(0);
 	#glColors = new Uint8Array(0);
 	#glSizes = new Float32Array(0);
 	#order = new Uint32Array(0);
+	#visibleCategories: Set<number> | null = null;
 
-	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
-	#container: HTMLElement;
-	#figureWrapper: HTMLElement;
+	// Legend
+	#legend?: Legend;
 	#legendContainer: HTMLElement;
-	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: reserved for grand tour
-	#isDragging = false;
+
+	// Drawing state
 	#playing = false;
 	#pendingFrame = 0;
 
-	#sx: Scale;
-	#sy: Scale;
+	// Event emitter
+	#emitter = new Emitter<ScatterEvents>();
 
-	#opts: Required<
-		Pick<
-			ScatterplotOptions,
-			| "pointSize"
-			| "scaleMode"
-			| "background"
-			| "showAxisLabels"
-			| "axisLength"
-			| "depthSort"
-			| "legendWidth"
-			| "cameraZ"
-			| "focalLength"
-			| "minDepthScale"
-		>
-	> & {
-		margin: Margin;
-		showLegend?: boolean;
-		pixelRatio?: number;
-		width?: number;
-		height?: number;
-	};
-
-	private constructor(container: HTMLElement, opts: ScatterplotOptions = {}) {
-		this.#container = container;
+	private constructor(container: HTMLElement, opts: ScatterOptions = {}) {
 		this.#opts = {
 			width: opts.width,
 			height: opts.height,
 			legendWidth: opts.legendWidth ?? 120,
 			pointSize: opts.pointSize ?? 6,
-			scaleMode: opts.scaleMode ?? "center",
-			background: opts.background ?? [0, 0, 0, 0],
+			background: opts.background ? parseColor(opts.background) : [0, 0, 0, 0],
 			margin: { ...DEFAULT_MARGIN, ...opts.margin },
 			showLegend: opts.showLegend,
 			showAxisLabels: opts.showAxisLabels ?? true,
@@ -244,7 +266,6 @@ export class Scatterplot {
 			this.#projection,
 			this.#sx,
 			this.#sy,
-			this.#opts.axisLength,
 		);
 
 		// ResizeObserver - observe the figure wrapper for canvas sizing
@@ -255,10 +276,7 @@ export class Scatterplot {
 	/**
 	 * Create a new Scatterplot and mount it in the given container element.
 	 */
-	static create(
-		container: HTMLElement,
-		opts?: ScatterplotOptions,
-	): Scatterplot {
+	static create(container: HTMLElement, opts?: ScatterOptions): Scatterplot {
 		return new Scatterplot(container, opts);
 	}
 
@@ -416,15 +434,8 @@ export class Scatterplot {
 			this.#projection,
 			this.#sx,
 			this.#sy,
-			this.#opts.axisLength,
 		);
-		this.#overlay.initAxes(dimLabels, {
-			onDragStart: () => {
-				this.#isDragging = true;
-			},
-			onDragEnd: () => {
-				this.#isDragging = false;
-			},
+		this.#overlay.init(dimLabels, {
 			onProjectionChanged: () => {
 				this.#emitter.emit("projection", {
 					matrix: this.#projection.getMatrix(),
@@ -459,6 +470,15 @@ export class Scatterplot {
 		});
 	}
 
+	/** Schedule a single render frame if playing and none is pending. */
+	#markDirty(): void {
+		if (!this.#playing || this.#pendingFrame !== 0) return;
+		this.#pendingFrame = requestAnimationFrame(() => {
+			this.#pendingFrame = 0;
+			if (this.#playing) this.#render();
+		});
+	}
+
 	/** Enable rendering. Flushes any pending state changes. */
 	play(): void {
 		if (this.#playing) return;
@@ -473,15 +493,6 @@ export class Scatterplot {
 			cancelAnimationFrame(this.#pendingFrame);
 			this.#pendingFrame = 0;
 		}
-	}
-
-	/** Schedule a single render frame if playing and none is pending. */
-	#markDirty(): void {
-		if (!this.#playing || this.#pendingFrame !== 0) return;
-		this.#pendingFrame = requestAnimationFrame(() => {
-			this.#pendingFrame = 0;
-			if (this.#playing) this.#render();
-		});
 	}
 
 	/** Force a resize recalculation. */
@@ -575,10 +586,20 @@ export class Scatterplot {
 		this.#markDirty();
 	}
 
+	/** Position of axis handles in data coordinates. */
+	get axisLength(): number {
+		return this.#opts.axisLength;
+	}
+
+	set axisLength(value: number) {
+		this.#opts.axisLength = value;
+		this.#markDirty();
+	}
+
 	/** Subscribe to events. Returns an unsubscribe function. */
-	on<K extends keyof ScatterplotEvents & string>(
+	on<K extends keyof ScatterEvents & string>(
 		event: K,
-		fn: (data: ScatterplotEvents[K]) => void,
+		fn: (data: ScatterEvents[K]) => void,
 	): () => void {
 		return this.#emitter.on(event, fn);
 	}
@@ -599,10 +620,10 @@ export class Scatterplot {
 
 		const { matrix, npoint, ndim, labelIndices, rgbTuples } = this.#data;
 
-		// Project data to 2D
+		// Project the data to 2D
 		const projected = this.#projection.projectXY(matrix);
 
-		// Project axis endpoints
+		// Project the axis endpoints to 2D
 		const r = this.#opts.axisLength;
 		const signs = this.#projection.axisZSigns();
 		const posAxisData = identity(ndim).map((row) => row.map((v) => v * r));
@@ -613,22 +634,17 @@ export class Scatterplot {
 			new Array(ndim).fill(0),
 		]);
 
-		// Update scales (include data + axis endpoints)
-		const allPoints = projected.concat(posAxisProjected, negAxisProjected);
-		const margin = this.#opts.margin;
-
-		if (this.#opts.scaleMode === "center") {
-			updateScaleCenter(
-				allPoints,
-				this.#canvas,
-				this.#sx,
-				this.#sy,
-				1.0,
-				margin,
-			);
-		} else {
-			updateScaleSpan(allPoints, this.#canvas, this.#sx, this.#sy, 1.0, margin);
-		}
+		// Update the scales based on axis endpoints so they all fit within the
+		// canvas margins, with origin in the canvas center.
+		const axisEndsProjected = posAxisProjected.concat(negAxisProjected);
+		updateScaleCenter(
+			axisEndsProjected,
+			this.#canvas,
+			this.#sx,
+			this.#sy,
+			1.0,
+			this.#opts.margin,
+		);
 
 		const sx = this.#sx;
 		const sy = this.#sy;
@@ -648,40 +664,50 @@ export class Scatterplot {
 			focalLength,
 			minDepthScale,
 		);
+
+		// Make points behind the camera vanish
 		const alphas = zcoords.map((z) => (z > cameraZ ? 0 : 255));
 
-		// Sort points back-to-front by proximity (farthest first)
+		// Sort points farthest to closest
 		const order = this.#order;
 		for (let i = 0; i < npoint; i++) order[i] = i;
 		if (this.#opts.depthSort) {
 			order.sort((a, b) => zcoords[a] - zcoords[b]);
 		}
 
-		// Write data points into flat buffers (in sorted order)
+		// Write data points into the flat buffers (in sorted order)
 		for (let si = 0; si < npoint; si++) {
 			const i = order[si];
+
+			// position
 			pos[si * 2] = sx(projected[i][0]);
 			pos[si * 2 + 1] = sy(projected[i][1]);
+
+			// size
 			siz[si] = baseSize * depthScale[i];
+
+			// color
 			const catIdx = labelIndices[i];
 			const c4 = si * 4;
 			col[c4] = rgbTuples[catIdx][0];
 			col[c4 + 1] = rgbTuples[catIdx][1];
 			col[c4 + 2] = rgbTuples[catIdx][2];
-			// Set the point's alpha (opacity) to its stored alpha value if
-			// there's no visibility filter active or the point's category is
-			// in the visible set; otherwise set the alpha to 0 (fully transparent).
+
+			// opacity
+			// Use the stored alpha value if there's no visibility filter or
+			// if the point is not masked under the visibility filter.
 			col[c4 + 3] = vis === null || vis.has(catIdx) ? alphas[i] : 0;
 		}
 
-		// Write axis line vertices: forward (solid) then backward (faint)
+		// Append the vertices for the axis line segments to the flat buffers
 		const nAxisVerts = ndim * 4;
 		let vi = npoint;
 		const ox = sx(originProjected[0][0]);
 		const oy = sy(originProjected[0][1]);
-
+		// "Towards" segments
 		for (let i = 0; i < ndim; i++) {
 			const toward = signs[i] >= 0 ? posAxisProjected[i] : negAxisProjected[i];
+			// origin: position, color, opacity
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
 			col[vi * 4] = 0;
@@ -689,6 +715,7 @@ export class Scatterplot {
 			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 255;
 			vi++;
+			// endpoint: position, color, opacity
 			pos[vi * 2] = sx(toward[0]);
 			pos[vi * 2 + 1] = sy(toward[1]);
 			col[vi * 4] = 0;
@@ -697,8 +724,10 @@ export class Scatterplot {
 			col[vi * 4 + 3] = 255;
 			vi++;
 		}
+		// "Away" segments
 		for (let i = 0; i < ndim; i++) {
 			const away = signs[i] >= 0 ? negAxisProjected[i] : posAxisProjected[i];
+			// origin: position, color, opacity
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
 			col[vi * 4] = 0;
@@ -706,6 +735,7 @@ export class Scatterplot {
 			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 60;
 			vi++;
+			// endpoint: position, color, opacity
 			pos[vi * 2] = sx(away[0]);
 			pos[vi * 2 + 1] = sy(away[1]);
 			col[vi * 4] = 0;
@@ -715,7 +745,10 @@ export class Scatterplot {
 			vi++;
 		}
 
+		// Draw points and axis lines
 		this.#webgl.render(pos, col, siz, npoint, nAxisVerts);
-		this.#overlay.redrawAxes();
+
+		// Redraw the SVG overlay
+		this.#overlay.redraw(this.#opts.axisLength);
 	}
 }

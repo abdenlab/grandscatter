@@ -1,9 +1,11 @@
+export type {
+	ScatterData,
+	ScatterEvents,
+	ScatterOptions,
+} from "./Scatterplot.js";
 export { Scatterplot } from "./Scatterplot.js";
 export type {
 	ArrowLoadOptions,
 	ArrowTable,
 	ArrowVector,
-	ScatterData,
-	ScatterplotEvents,
-	ScatterplotOptions,
 } from "./types.js";

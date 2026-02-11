@@ -62,20 +62,20 @@
 <div id="plot"></div>
 
 <script type="module">
-import { Scatterplot } from "@anyscatter/core";
 import { tableFromIPC } from "https://esm.sh/apache-arrow@18.1.0";
+import { Scatterplot } from "@anyscatter/core";
 
 const table = await tableFromIPC(fetch("eigs.arrow"));
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
-	pointSize: 12,
-	scaleMode: "center",
+	pointSize: 6,
 	axisLength: 1,
-	cameraZ: 1.5,
+	cameraZ: 1,
 	focalLength: 0.5,
+	minDepthScale: 0,
 });
 plot.loadArrow(table, {
-  dimensions: ["E1", "E2", "E3", "E4", "E5"], 
+  dimensions: ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9"], 
   labelColumn: "name",
   colors: {
     "A1": "#e23838", 

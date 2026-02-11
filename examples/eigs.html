@@ -29,14 +29,13 @@
 <p>Drag the axis handles to rotate the projection.</p>
 <div id="plot"></div>
 <script type="module">
-import { Scatterplot } from "@anyscatter/core";
 import { tableFromIPC } from "https://esm.sh/apache-arrow@18.1.0";
+import { Scatterplot } from "@anyscatter/core";
 
 const table = await tableFromIPC(fetch("eigs.arrow"));
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
 	pointSize: 12,
-	scaleMode: "center",
 	axisLength: 1,
 });
 plot.loadArrow(table, {

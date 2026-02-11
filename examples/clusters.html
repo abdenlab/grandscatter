@@ -22,16 +22,6 @@
 		border: 1px solid #ddd;
 		border-radius: 4px;
 	}
-	#data-controls {
-		margin-bottom: 1rem;
-	}
-	#data-controls label {
-		margin-right: 0.5rem;
-	}
-	#data-controls select {
-		padding: 0.25rem 0.5rem;
-		font-size: 1rem;
-	}
 	#controls {
 		display: flex;
 		gap: 2rem;
@@ -53,6 +43,16 @@
 		text-align: right;
 		font-variant-numeric: tabular-nums;
 	}
+	#data-controls {
+		margin-bottom: 1rem;
+	}
+	#data-controls label {
+		margin-right: 0.5rem;
+	}
+	#data-controls select {
+		padding: 0.25rem 0.5rem;
+		font-size: 1rem;
+	}
 </style>
 </head>
 <body>
@@ -62,9 +62,9 @@
 	<label for="ndim">Dimensions:</label>
 	<select id="ndim">
 		<option value="2">2D</option>
-		<option value="3">3D</option>
+		<option value="3" selected>3D</option>
 		<option value="4">4D</option>
-		<option value="5" selected>3D</option>
+		<option value="5">5D</option>
 	</select>
 </div>
 <div id="controls">
@@ -87,6 +87,11 @@
 		<label for="minDepthScale">Min Scale:</label>
 		<input type="range" id="minDepthScale" min="0" max="1" step="0.05" value="0.1">
 		<span class="value" id="minDepthScaleValue">0.1</span>
+	</div>
+	<div class="control">
+		<label for="axisLength">Axis Length:</label>
+		<input type="range" id="axisLength" min="0.5" max="5" step="0.1" value="2">
+		<span class="value" id="axisLengthValue">2</span>
 	</div>
 </div>
 <div id="plot"></div>
@@ -136,9 +141,8 @@ function generateData(ndim) {
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
 	pointSize: 20,
-	scaleMode: "center",
-	axisLength: 2,
-	cameraZ: 3,
+	axisLength: 5,
+	cameraZ: 5,
 	focalLength: 1,
 });
 
@@ -177,6 +181,15 @@ minDepthScaleInput.addEventListener("input", () => {
 	const val = parseFloat(minDepthScaleInput.value);
 	plot.minDepthScale = val;
 	minDepthScaleValue.textContent = val;
+});
+
+const axisLengthInput = document.getElementById("axisLength");
+const axisLengthValue = document.getElementById("axisLengthValue");
+
+axisLengthInput.addEventListener("input", () => {
+	const val = parseFloat(axisLengthInput.value);
+	plot.axisLength = val;
+	axisLengthValue.textContent = val;
 });
 
 const ndimSelect = document.getElementById("ndim");
