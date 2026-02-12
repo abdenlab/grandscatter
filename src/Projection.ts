@@ -111,6 +111,22 @@ export class Projection {
 	}
 
 	/**
+	 * Project data points to 3D.
+	 *
+	 * @param data - npoint x ndim matrix (each row is a data point)
+	 * @returns npoint x 3 matrix (each row is [x, y, z])
+	 */
+	projectXYZ(data: number[][]): number[][] {
+		if (this.#ndim < 3) {
+			// For 2D data, z is always 0
+			const proj = this.#matrix.map((row) => [row[0], row[1]]);
+			return matmul(data, proj).map((row) => [row[0], row[1], 0]);
+		}
+		const proj = this.#matrix.map((row) => [row[0], row[1], row[2]]);
+		return matmul(data, proj);
+	}
+
+	/**
 	 * Returns the sign of column 2 for each axis: +1 if the axis
 	 * points toward the viewer, -1 if away. For ndim < 3, returns all +1.
 	 */

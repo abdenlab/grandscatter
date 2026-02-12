@@ -66,17 +66,22 @@
 		<option value="4">4D</option>
 		<option value="5">5D</option>
 	</select>
+	<label for="projection">Projection:</label>
+	<select id="projection">
+		<option value="orthographic" selected>Orthographic</option>
+		<option value="perspective">Perspective</option>
+	</select>
 </div>
 <div id="controls">
 	<div class="control">
 		<label for="cameraZ">Camera Z:</label>
-		<input type="range" id="cameraZ" min="0.5" max="10" step="0.1" value="2">
+		<input type="range" id="cameraZ" min="-15" max="15" step="0.1" value="2">
 		<span class="value" id="cameraZValue">5</span>
 	</div>
 	<div class="control">
-		<label for="focalLength">Focal Length:</label>
-		<input type="range" id="focalLength" min="0.1" max="10" step="0.1" value="5">
-		<span class="value" id="focalLengthValue">5</span>
+		<label for="viewAngle">FOV:</label>
+		<input type="range" id="viewAngle" min="1" max="179" step="1" value="90">
+		<span class="value" id="viewAngleValue">90°</span>
 	</div>
 	<div class="control">
 		<label for="pointSize">Point Size:</label>
@@ -142,7 +147,7 @@ function generateData(ndim) {
 const plot = Scatterplot.create(document.getElementById("plot"), {
 	pointSize: 20,
 	axisLength: 5,
-	cameraZ: 5,
+	// cameraZ: 2,
 	focalLength: 1,
 });
 
@@ -150,8 +155,8 @@ plot.loadData(generateData(3));
 // Wire up slider controls
 const cameraZInput = document.getElementById("cameraZ");
 const cameraZValue = document.getElementById("cameraZValue");
-const focalLengthInput = document.getElementById("focalLength");
-const focalLengthValue = document.getElementById("focalLengthValue");
+const viewAngleInput = document.getElementById("viewAngle");
+const viewAngleValue = document.getElementById("viewAngleValue");
 
 cameraZInput.addEventListener("input", () => {
 	const val = parseFloat(cameraZInput.value);
@@ -159,10 +164,10 @@ cameraZInput.addEventListener("input", () => {
 	cameraZValue.textContent = val;
 });
 
-focalLengthInput.addEventListener("input", () => {
-	const val = parseFloat(focalLengthInput.value);
-	plot.focalLength = val;
-	focalLengthValue.textContent = val;
+viewAngleInput.addEventListener("input", () => {
+	const val = parseFloat(viewAngleInput.value);
+	plot.viewAngle = val;
+	viewAngleValue.textContent = val + "°";
 });
 
 const pointSizeInput = document.getElementById("pointSize");
@@ -196,6 +201,11 @@ const ndimSelect = document.getElementById("ndim");
 ndimSelect.addEventListener("change", () => {
 	const val = parseInt(ndimSelect.value, 10);
 	plot.loadData(generateData(val));
+});
+
+const projectionSelect = document.getElementById("projection");
+projectionSelect.addEventListener("change", () => {
+	plot.projection = projectionSelect.value;
 });
 </script>
 </body>

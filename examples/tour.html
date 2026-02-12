@@ -68,10 +68,8 @@ import { Scatterplot } from "@anyscatter/core";
 const table = await tableFromIPC(fetch("eigs.arrow"));
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
-	pointSize: 6,
-	axisLength: 1,
-	cameraZ: 1,
-	focalLength: 0.5,
+	pointSize: 8,
+	axisLength: 1.5,
 	minDepthScale: 0,
 });
 plot.loadArrow(table, {

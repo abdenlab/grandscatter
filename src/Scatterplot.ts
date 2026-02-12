@@ -17,7 +17,7 @@ export interface ScatterOptions {
 	pointSize?: number;
 	/** Minimum depth scaling factor for farthest points. Default: 0.1 */
 	minDepthScale?: number;
-	/** Camera position along the depth axis. Points with z > cameraZ are hidden. Default: 5 */
+	/** Camera position along the depth axis. Points with z > cameraZ are hidden. Default: max data radius */
 	cameraZ?: number;
 	/** Focal length controlling perspective strength. Shorter = stronger perspective. Default: 1 */
 	focalLength?: number;
@@ -39,6 +39,8 @@ export interface ScatterOptions {
 	pixelRatio?: number;
 	/** Canvas background color as CSS color string. Default: "transparent" */
 	background?: string;
+	/** Projection type: "orthographic" (no perspective) or "perspective". Default: "orthographic" */
+	projection?: "orthographic" | "perspective";
 }
 
 export interface ScatterData {
@@ -68,6 +70,8 @@ interface InternalData {
 	hexColors: string[];
 	rgbTuples: [number, number, number][];
 	legendEntries: [string, string][];
+	/** Max Euclidean distance of any point from origin (safe default for cameraZ). */
+	maxDataRadius: number;
 }
 
 interface InternalOptions {
@@ -77,7 +81,8 @@ interface InternalOptions {
 	axisLength: number;
 	depthSort: boolean;
 	legendWidth: number;
-	cameraZ: number;
+	/** Camera Z position. If undefined, defaults to maxDataRadius at render time. */
+	cameraZ?: number;
 	focalLength: number;
 	minDepthScale: number;
 	margin: Margin;
@@ -85,6 +90,7 @@ interface InternalOptions {
 	pixelRatio?: number;
 	width?: number;
 	height?: number;
+	projection: "orthographic" | "perspective";
 }
 
 interface Margin {
@@ -111,6 +117,18 @@ function resizeCanvas(canvas: HTMLCanvasElement, pixelRatio?: number): void {
 		canvas.width = displayWidth;
 		canvas.height = displayHeight;
 	}
+}
+
+function perspectiveTransform(
+	point: number[],
+	cameraZ: number,
+	focalLength: number,
+): number[] {
+	return [
+		(focalLength * point[0]) / (cameraZ - point[2]),
+		(focalLength * point[1]) / (cameraZ - point[2]),
+		focalLength / (focalLength + (cameraZ - point[2])),
+	];
 }
 
 /**
@@ -208,9 +226,10 @@ export class Scatterplot {
 			axisLength: opts.axisLength ?? 1,
 			pixelRatio: opts.pixelRatio,
 			depthSort: opts.depthSort ?? true,
-			cameraZ: opts.cameraZ ?? 5,
+			cameraZ: opts.cameraZ,
 			focalLength: opts.focalLength ?? 1,
 			minDepthScale: opts.minDepthScale ?? 0.1,
+			projection: opts.projection ?? "orthographic",
 		};
 
 		// Create wrapper: [figure (canvas + overlay)] + [legend]
@@ -415,6 +434,16 @@ export class Scatterplot {
 			return [parsed.r, parsed.g, parsed.b];
 		});
 
+		// Compute max Euclidean distance from origin (safe cameraZ default)
+		let maxDataRadius = 0;
+		for (let i = 0; i < npoint; i++) {
+			let sumSq = 0;
+			for (let d = 0; d < ndim; d++) {
+				sumSq += matrix[i][d] ** 2;
+			}
+			maxDataRadius = Math.max(maxDataRadius, Math.sqrt(sumSq));
+		}
+
 		return {
 			matrix,
 			npoint,
@@ -424,6 +453,7 @@ export class Scatterplot {
 			hexColors,
 			rgbTuples,
 			legendEntries,
+			maxDataRadius,
 		};
 	}
 
@@ -548,7 +578,7 @@ export class Scatterplot {
 
 	/** Camera position along the depth axis. Points with z > cameraZ are hidden. */
 	get cameraZ(): number {
-		return this.#opts.cameraZ;
+		return this.#opts.cameraZ ?? this.#data?.maxDataRadius ?? 5;
 	}
 
 	set cameraZ(value: number) {
@@ -563,6 +593,19 @@ export class Scatterplot {
 
 	set focalLength(value: number) {
 		this.#opts.focalLength = value;
+		this.#markDirty();
+	}
+
+	/** View angle controlling the zoom (field of view). */
+	get viewAngle(): number {
+		return this.#opts.focalLength;
+	}
+
+	set viewAngle(value: number) {
+		const focalLength = 1 / Math.tan((value * Math.PI) / 360);
+		const ratio = this.#opts.focalLength / focalLength;
+		this.#opts.focalLength = focalLength;
+		this.#opts.axisLength *= ratio;
 		this.#markDirty();
 	}
 
@@ -583,6 +626,16 @@ export class Scatterplot {
 
 	set minDepthScale(value: number) {
 		this.#opts.minDepthScale = value;
+		this.#markDirty();
+	}
+
+	/** Projection type: "orthographic" or "perspective". */
+	get projection(): "orthographic" | "perspective" {
+		return this.#opts.projection;
+	}
+
+	set projection(value: "orthographic" | "perspective") {
+		this.#opts.projection = value;
 		this.#markDirty();
 	}
 
@@ -620,8 +673,9 @@ export class Scatterplot {
 
 		const { matrix, npoint, ndim, labelIndices, rgbTuples } = this.#data;
 
-		// Project the data to 2D
-		const projected = this.#projection.projectXY(matrix);
+		// Project the data
+		const projected = this.#projection.projectXYZ(matrix);
+		const zcoords = projected.map((point) => point[2]);
 
 		// Project the axis endpoints to 2D
 		const r = this.#opts.axisLength;
@@ -629,7 +683,9 @@ export class Scatterplot {
 		const posAxisData = identity(ndim).map((row) => row.map((v) => v * r));
 		const negAxisData = identity(ndim).map((row) => row.map((v) => -v * r));
 		const posAxisProjected = this.#projection.projectXY(posAxisData);
+		const posAxisProjectedZ = this.#projection.projectZ(posAxisData);
 		const negAxisProjected = this.#projection.projectXY(negAxisData);
+		const negAxisProjectedZ = this.#projection.projectZ(negAxisData);
 		const originProjected = this.#projection.projectXY([
 			new Array(ndim).fill(0),
 		]);
@@ -654,10 +710,10 @@ export class Scatterplot {
 		const vis = this.#visibleCategories;
 
 		// Compute per-point sizes scaled by depth proximity
-		const { cameraZ, focalLength, minDepthScale } = this.#opts;
+		const { focalLength, minDepthScale } = this.#opts;
+		const cameraZ = this.#opts.cameraZ ?? this.#data.maxDataRadius;
 		const dpr = this.#opts.pixelRatio ?? window.devicePixelRatio;
 		const baseSize = this.#opts.pointSize * dpr;
-		const zcoords = this.#projection.projectZ(matrix);
 		const depthScale = this.#projection.depthScale(
 			matrix,
 			cameraZ,
@@ -675,16 +731,26 @@ export class Scatterplot {
 			order.sort((a, b) => zcoords[a] - zcoords[b]);
 		}
 
+		const orthographic = this.#opts.projection === "orthographic";
+
 		// Write data points into the flat buffers (in sorted order)
 		for (let si = 0; si < npoint; si++) {
 			const i = order[si];
 
-			// position
-			pos[si * 2] = sx(projected[i][0]);
-			pos[si * 2 + 1] = sy(projected[i][1]);
-
-			// size
-			siz[si] = baseSize * depthScale[i];
+			// position and size
+			if (orthographic) {
+				pos[si * 2] = sx(projected[i][0]);
+				pos[si * 2 + 1] = sy(projected[i][1]);
+				siz[si] = baseSize;
+			} else {
+				pos[si * 2] = sx(
+					(focalLength * projected[i][0]) / (cameraZ - zcoords[i]),
+				);
+				pos[si * 2 + 1] = sy(
+					(focalLength * projected[i][1]) / (cameraZ - zcoords[i]),
+				);
+				siz[si] = baseSize * depthScale[i];
+			}
 
 			// color
 			const catIdx = labelIndices[i];
@@ -707,6 +773,8 @@ export class Scatterplot {
 		// "Towards" segments
 		for (let i = 0; i < ndim; i++) {
 			const toward = signs[i] >= 0 ? posAxisProjected[i] : negAxisProjected[i];
+			const towardZ =
+				signs[i] >= 0 ? posAxisProjectedZ[i] : negAxisProjectedZ[i];
 			// origin: position, color, opacity
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
@@ -716,8 +784,13 @@ export class Scatterplot {
 			col[vi * 4 + 3] = 255;
 			vi++;
 			// endpoint: position, color, opacity
-			pos[vi * 2] = sx(toward[0]);
-			pos[vi * 2 + 1] = sy(toward[1]);
+			if (orthographic) {
+				pos[vi * 2] = sx(toward[0]);
+				pos[vi * 2 + 1] = sy(toward[1]);
+			} else {
+				pos[vi * 2] = sx((focalLength * toward[0]) / (cameraZ - towardZ));
+				pos[vi * 2 + 1] = sy((focalLength * toward[1]) / (cameraZ - towardZ));
+			}
 			col[vi * 4] = 0;
 			col[vi * 4 + 1] = 0;
 			col[vi * 4 + 2] = 0;
@@ -727,6 +800,7 @@ export class Scatterplot {
 		// "Away" segments
 		for (let i = 0; i < ndim; i++) {
 			const away = signs[i] >= 0 ? negAxisProjected[i] : posAxisProjected[i];
+			const awayZ = signs[i] >= 0 ? negAxisProjectedZ[i] : posAxisProjectedZ[i];
 			// origin: position, color, opacity
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
@@ -736,8 +810,13 @@ export class Scatterplot {
 			col[vi * 4 + 3] = 60;
 			vi++;
 			// endpoint: position, color, opacity
-			pos[vi * 2] = sx(away[0]);
-			pos[vi * 2 + 1] = sy(away[1]);
+			if (orthographic) {
+				pos[vi * 2] = sx(away[0]);
+				pos[vi * 2 + 1] = sy(away[1]);
+			} else {
+				pos[vi * 2] = sx((focalLength * away[0]) / (cameraZ - awayZ));
+				pos[vi * 2 + 1] = sy((focalLength * away[1]) / (cameraZ - awayZ));
+			}
 			col[vi * 4] = 0;
 			col[vi * 4 + 1] = 0;
 			col[vi * 4 + 2] = 0;
