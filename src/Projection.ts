@@ -1,6 +1,90 @@
 import { circularBasis, clone, dot, matmul, orthogonalize } from "./linalg.js";
 
 /**
+ * Perspective camera that transforms 3D projected coordinates to 2D canvas
+ * coordinates with perspective foreshortening.
+ *
+ * The camera is positioned at `cameraZ` along the depth axis, looking toward
+ * negative z. Points closer to the camera appear larger; points farther away
+ * appear smaller. The `focalLength` controls how strongly depth affects the
+ * projection—shorter focal lengths create stronger perspective distortion.
+ */
+export class PerspectiveCamera {
+	cameraZ: number;
+	focalLength: number;
+	minDepthScale: number;
+
+	constructor(cameraZ = 5, focalLength = 1, minDepthScale = 0.1) {
+		this.cameraZ = cameraZ;
+		this.focalLength = focalLength;
+		this.minDepthScale = minDepthScale;
+	}
+
+	/**
+	 * Convert a view angle (field of view) in degrees to focal length.
+	 * As FOV → 0°, focal length → ∞ (approaches orthographic).
+	 * A 90° FOV gives focal length = 1.
+	 */
+	static fovToFocalLength(viewAngle: number): number {
+		return 1 / Math.tan((viewAngle * Math.PI) / 360);
+	}
+
+	/**
+	 * Convert focal length to view angle (field of view) in degrees.
+	 */
+	static focalLengthToFov(focalLength: number): number {
+		return (Math.atan(1 / focalLength) * 360) / Math.PI;
+	}
+
+	/**
+	 * Project a 3D point to 2D canvas coordinates with perspective.
+	 *
+	 * @param x - x coordinate in projected 3D space
+	 * @param y - y coordinate in projected 3D space
+	 * @param z - z coordinate (depth) in projected 3D space
+	 * @returns [canvasX, canvasY] with perspective applied
+	 */
+	project(x: number, y: number, z: number): [number, number] {
+		const scale = this.focalLength / (this.cameraZ - z);
+		return [x * scale, y * scale];
+	}
+
+	/**
+	 * Compute the depth-based scaling factor for a point at depth z.
+	 * Used to scale point sizes based on distance from camera.
+	 *
+	 * @param z - depth coordinate in projected 3D space
+	 * @returns scaling factor in [minDepthScale, 1]
+	 */
+	depthScale(z: number): number {
+		const scale = this.focalLength / (this.focalLength + (this.cameraZ - z));
+		if (scale < this.minDepthScale) return this.minDepthScale;
+		if (scale > 1) return 1;
+		return scale;
+	}
+
+	/**
+	 * Reference scale at z=0, used to compensate axis length so that
+	 * axes at z=0 have consistent visual length regardless of camera settings.
+	 */
+	get referenceScale(): number {
+		return this.focalLength / this.cameraZ;
+	}
+
+	/**
+	 * Get/set view angle (field of view) in degrees.
+	 * This is an alternative interface to focalLength.
+	 */
+	get viewAngle(): number {
+		return PerspectiveCamera.focalLengthToFov(this.focalLength);
+	}
+
+	set viewAngle(degrees: number) {
+		this.focalLength = PerspectiveCamera.fovToFocalLength(degrees);
+	}
+}
+
+/**
  * Manages an ndim x ndim orthogonal projection matrix and projects
  * high-dimensional data down to 2D.
  *

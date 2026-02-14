@@ -4,6 +4,7 @@ export type {
 	ScatterOptions,
 } from "./Scatterplot.js";
 export { Scatterplot } from "./Scatterplot.js";
+export { PerspectiveCamera, Projection } from "./Projection.js";
 export type {
 	ArrowLoadOptions,
 	ArrowTable,
