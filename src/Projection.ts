@@ -85,8 +85,8 @@ export class PerspectiveCamera {
 }
 
 /**
- * Manages an ndim x ndim orthogonal projection matrix and projects
- * high-dimensional data down to 2D.
+ * Manages an ndim x ndim orthogonal projection matrix to project
+ * high-dimensional data down to 2D or 3D.
  *
  * ## Rows represent the data axes (features/dimensions)
  * Each row i represents how the i-th axis in data space contributes to the
@@ -172,6 +172,15 @@ export class Projection {
 	}
 
 	/**
+	 * Returns the sign of column 2 for each axis: +1 if the axis
+	 * points toward the viewer, -1 if away. For ndim < 3, returns all +1.
+	 */
+	axisZSigns(): number[] {
+		if (this.#ndim < 3) return new Array(this.#ndim).fill(1);
+		return this.#matrix.map((row) => (row[2] >= 0 ? 1 : -1));
+	}
+
+	/**
 	 * Project data points to 2D.
 	 *
 	 * @param data - npoint x ndim matrix (each row is a data point)
@@ -208,61 +217,5 @@ export class Projection {
 		}
 		const proj = this.#matrix.map((row) => [row[0], row[1], row[2]]);
 		return matmul(data, proj);
-	}
-
-	/**
-	 * Returns the sign of column 2 for each axis: +1 if the axis
-	 * points toward the viewer, -1 if away. For ndim < 3, returns all +1.
-	 */
-	axisZSigns(): number[] {
-		if (this.#ndim < 3) return new Array(this.#ndim).fill(1);
-		return this.#matrix.map((row) => (row[2] >= 0 ? 1 : -1));
-	}
-
-	/**
-	 * Compute per-point perspective scaling factors based on depth, where
-	 * closer points are scaled up and farther points are scaled down.
-	 *
-	 * The camera is placed at position `cameraZ` looking towards the negative
-	 * z direction. It has a focal length that determines how strongly distance
-	 * affects scaling. A shorter focal length means a "zoom-in" effect with
-	 * stronger perspective scaling, while a longer focal length means a
-	 * "zoom-out" effect with weaker perspective scaling.
-	 *
-	 * Depth factors are clamped to a minimum value `min` to prevent far away
-	 * points from disappearing. Points "behind" the camera (z > cameraZ) are
-	 * scaled as if they were at the camera position (depth factor = 1).
-	 *
-	 * For ndim < 3 (no depth axis), returns all 1s.
-	 *
-	 * @param data - npoint x ndim matrix
-	 * @param cameraZ - position of the camera along the depth axis
-	 * @param focalLength - controls perspective strength
-	 * @param min - minimum scaling factor for farthest points
-	 * @returns Float64Array of length npoint, values in [min, 1]
-	 */
-	depthScale(
-		data: number[][],
-		cameraZ = 0.5,
-		focalLength = 1,
-		min = 0.1,
-	): Float64Array {
-		const n = data.length;
-		const out = new Float64Array(n);
-		if (this.#ndim < 3) {
-			out.fill(1);
-			return out;
-		}
-
-		// Project the data onto the z-axis (column 2) and get depth values
-		// relative to the camera. Then apply perspective scaling formula.
-		const col2 = this.#matrix.map((row) => row[2]);
-		for (let i = 0; i < n; i++) {
-			const z = dot(data[i], col2);
-			out[i] = focalLength / (focalLength + (cameraZ - z));
-			if (out[i] < min) out[i] = min;
-			if (out[i] > 1) out[i] = 1;
-		}
-		return out;
 	}
 }

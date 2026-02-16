@@ -68,8 +68,8 @@ import { Scatterplot } from "@anyscatter/core";
 const table = await tableFromIPC(fetch("eigs.arrow"));
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
-	pointSize: 8,
-	axisLength: 1.5,
+	basePointSize: 8,
+	axisLength: 3,
 	minDepthScale: 0,
 	projection: "perspective",
 });

@@ -35,8 +35,8 @@ import { Scatterplot } from "@anyscatter/core";
 const table = await tableFromIPC(fetch("eigs.arrow"));
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
-	pointSize: 12,
-	axisLength: 1,
+	basePointSize: 2,
+	// axisLength: 1,
 });
 plot.loadArrow(table, {
   dimensions: ["E1", "E2", "E3", "E4", "E5"], 

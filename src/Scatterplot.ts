@@ -11,23 +11,25 @@ import type { ArrowLoadOptions, ArrowTable, Scale } from "./types.js";
 import { WebGLRenderer } from "./WebGLRenderer.js";
 
 export interface ScatterOptions {
-	/** Position of axis handles in data coordinates. Default: 1 */
-	axisLength?: number;
+	/** Projection type: "orthographic" (no perspective) or "perspective". Default: "orthographic" */
+	projection?: "orthographic" | "perspective";
 	/** Point diameter in CSS pixels. Default: 6 */
-	pointSize?: number;
+	basePointSize?: number;
 	/** Minimum depth scaling factor for farthest points. Default: 0.1 */
 	minDepthScale?: number;
+	/** Initial position of axis handles in data coordinates. Default: max data radius */
+	axisLength?: number;
 	/** Camera position along the depth axis. Points with z > cameraZ are hidden. Default: max data radius */
 	cameraZ?: number;
-	/** Focal length controlling perspective strength. Shorter = stronger perspective. Default: 1 */
-	focalLength?: number;
+	/** View angle (field of view) in degrees. Smaller = more zoom. Default: 45 */
+	viewAngle?: number;
 	/** Sort points back-to-front by depth for correct occlusion. Default: true */
 	depthSort?: boolean;
 	/** Show/hide axis labels on handles. Default: true */
 	showAxisLabels?: boolean;
 	/** Show/hide the legend. Default: true if labels are provided. */
 	showLegend?: boolean;
-	/** Legend width in CSS pixels. Default: 100. Ignored if showLegend is false. */
+	/** Legend width in CSS pixels. Default: 120. Ignored if showLegend is false. */
 	legendWidth?: number;
 	/** Canvas width in CSS pixels. Default: fills container */
 	width?: number;
@@ -39,8 +41,24 @@ export interface ScatterOptions {
 	pixelRatio?: number;
 	/** Canvas background color as CSS color string. Default: "transparent" */
 	background?: string;
-	/** Projection type: "orthographic" (no perspective) or "perspective". Default: "orthographic" */
-	projection?: "orthographic" | "perspective";
+}
+
+interface ResolvedScatterOptions {
+	projection: "orthographic" | "perspective";
+	basePointSize: number;
+	minDepthScale: number;
+	axisLength?: number;
+	cameraZ?: number;
+	viewAngle: number;
+	depthSort: boolean;
+	showAxisLabels: boolean;
+	showLegend?: boolean;
+	legendWidth: number;
+	width?: number;
+	height?: number;
+	margin: Margin;
+	pixelRatio?: number;
+	background: [number, number, number, number];
 }
 
 export interface ScatterData {
@@ -52,16 +70,7 @@ export interface ScatterData {
 	colors?: Record<string, string>;
 }
 
-export interface ScatterEvents {
-	/** Fired after any projection matrix change (drag, setProjection, etc.) */
-	projection: { matrix: number[][] };
-	/** Fired when legend selection changes. */
-	select: { labels: Set<string | number> };
-	/** Fired on resize. */
-	resize: { width: number; height: number };
-}
-
-interface InternalData {
+interface ParsedScatterData {
 	matrix: number[][];
 	npoint: number;
 	ndim: number;
@@ -74,23 +83,13 @@ interface InternalData {
 	maxDataRadius: number;
 }
 
-interface InternalOptions {
-	pointSize: number;
-	background: [number, number, number, number];
-	showAxisLabels: boolean;
-	axisLength: number;
-	depthSort: boolean;
-	legendWidth: number;
-	/** Camera Z position. If undefined, defaults to maxDataRadius at render time. */
-	cameraZ?: number;
-	focalLength: number;
-	minDepthScale: number;
-	margin: Margin;
-	showLegend?: boolean;
-	pixelRatio?: number;
-	width?: number;
-	height?: number;
-	projection: "orthographic" | "perspective";
+export interface ScatterEvents {
+	/** Fired after any projection matrix change (drag, setProjection, etc.) */
+	projection: { matrix: number[][] };
+	/** Fired when legend selection changes. */
+	select: { labels: Set<string | number> };
+	/** Fired on resize. */
+	resize: { width: number; height: number };
 }
 
 interface Margin {
@@ -167,8 +166,8 @@ export function updateScaleCenter(
  * {@link loadData} to load data and begin rendering.
  */
 export class Scatterplot {
-	#opts: InternalOptions;
-	#data?: InternalData;
+	#opts: ResolvedScatterOptions;
+	#data?: ParsedScatterData;
 	#projection!: Projection;
 
 	// Container (figure canvas + legend)
@@ -203,21 +202,21 @@ export class Scatterplot {
 
 	private constructor(container: HTMLElement, opts: ScatterOptions = {}) {
 		this.#opts = {
+			projection: opts.projection ?? "orthographic",
+			basePointSize: opts.basePointSize ?? 6,
+			minDepthScale: opts.minDepthScale ?? 0.1,
+			axisLength: opts.axisLength,
+			cameraZ: opts.cameraZ,
+			viewAngle: opts.viewAngle ?? 45,
+			depthSort: opts.depthSort ?? true,
+			showAxisLabels: opts.showAxisLabels ?? true,
+			showLegend: opts.showLegend,
+			legendWidth: opts.legendWidth ?? 120,
 			width: opts.width,
 			height: opts.height,
-			legendWidth: opts.legendWidth ?? 120,
-			pointSize: opts.pointSize ?? 6,
-			background: opts.background ? parseColor(opts.background) : [0, 0, 0, 0],
 			margin: { ...DEFAULT_MARGIN, ...opts.margin },
-			showLegend: opts.showLegend,
-			showAxisLabels: opts.showAxisLabels ?? true,
-			axisLength: opts.axisLength ?? 1,
 			pixelRatio: opts.pixelRatio,
-			depthSort: opts.depthSort ?? true,
-			cameraZ: opts.cameraZ,
-			focalLength: opts.focalLength ?? 1,
-			minDepthScale: opts.minDepthScale ?? 0.1,
-			projection: opts.projection ?? "orthographic",
+			background: opts.background ? parseColor(opts.background) : [0, 0, 0, 0],
 		};
 
 		// Create wrapper: [figure (canvas + overlay)] + [legend]
@@ -371,7 +370,7 @@ export class Scatterplot {
 		});
 	}
 
-	#parseData(data: ScatterData): InternalData {
+	#parseData(data: ScatterData): ParsedScatterData {
 		const dimLabels = Object.keys(data.columns);
 		const ndim = dimLabels.length;
 		const npoint = data.columns[dimLabels[0]].length;
@@ -564,6 +563,16 @@ export class Scatterplot {
 		return this.#data?.dimLabels ?? [];
 	}
 
+	/** Position of axis handles in data coordinates. */
+	get axisLength(): number {
+		return this.#opts.axisLength ?? this.#data?.maxDataRadius ?? 1;
+	}
+
+	set axisLength(value: number) {
+		this.#opts.axisLength = value;
+		this.#markDirty();
+	}
+
 	/** Camera position along the depth axis. Points with z > cameraZ are hidden. */
 	get cameraZ(): number {
 		return this.#opts.cameraZ ?? this.#data?.maxDataRadius ?? 5;
@@ -574,33 +583,33 @@ export class Scatterplot {
 		this.#markDirty();
 	}
 
-	/** Focal length controlling perspective strength. Shorter = stronger perspective. */
-	get focalLength(): number {
-		return this.#opts.focalLength;
-	}
-
-	set focalLength(value: number) {
-		this.#opts.focalLength = value;
-		this.#markDirty();
-	}
-
-	/** View angle controlling the zoom (field of view) in degrees. */
+	/** View angle (field of view) in degrees. Smaller = more zoom. */
 	get viewAngle(): number {
-		return PerspectiveCamera.focalLengthToFov(this.#opts.focalLength);
+		return this.#opts.viewAngle;
 	}
 
 	set viewAngle(value: number) {
-		this.#opts.focalLength = PerspectiveCamera.fovToFocalLength(value);
+		this.#opts.viewAngle = value;
+		this.#markDirty();
+	}
+
+	/** Focal length derived from view angle. Shorter = stronger perspective. */
+	get focalLength(): number {
+		return PerspectiveCamera.fovToFocalLength(this.#opts.viewAngle);
+	}
+
+	set focalLength(value: number) {
+		this.#opts.viewAngle = PerspectiveCamera.focalLengthToFov(value);
 		this.#markDirty();
 	}
 
 	/** Point diameter in CSS pixels. */
-	get pointSize(): number {
-		return this.#opts.pointSize;
+	get basePointSize(): number {
+		return this.#opts.basePointSize;
 	}
 
-	set pointSize(value: number) {
-		this.#opts.pointSize = value;
+	set basePointSize(value: number) {
+		this.#opts.basePointSize = value;
 		this.#markDirty();
 	}
 
@@ -621,16 +630,6 @@ export class Scatterplot {
 
 	set projection(value: "orthographic" | "perspective") {
 		this.#opts.projection = value;
-		this.#markDirty();
-	}
-
-	/** Position of axis handles in data coordinates. */
-	get axisLength(): number {
-		return this.#opts.axisLength;
-	}
-
-	set axisLength(value: number) {
-		this.#opts.axisLength = value;
 		this.#markDirty();
 	}
 
@@ -659,12 +658,12 @@ export class Scatterplot {
 		const orthographic = this.#opts.projection === "orthographic";
 		const cameraZ = this.#opts.cameraZ ?? this.#data.maxDataRadius;
 		const dpr = this.#opts.pixelRatio ?? window.devicePixelRatio;
-		const baseSize = this.#opts.pointSize * dpr;
+		const baseSize = this.#opts.basePointSize * dpr;
 
 		// Create camera for perspective projection
 		const camera = new PerspectiveCamera(
 			cameraZ,
-			this.#opts.focalLength,
+			PerspectiveCamera.fovToFocalLength(this.#opts.viewAngle),
 			this.#opts.minDepthScale,
 		);
 
@@ -675,7 +674,7 @@ export class Scatterplot {
 		const zcoords = projected.map((point) => point[2]);
 
 		// Project the axis endpoints
-		const r = this.#opts.axisLength;
+		const r = this.axisLength;
 		const signs = this.#projection.axisZSigns();
 		const posAxisData = identity(ndim).map((row) => row.map((v) => v * r));
 		const negAxisData = identity(ndim).map((row) => row.map((v) => -v * r));
@@ -754,10 +753,10 @@ export class Scatterplot {
 		const ox = sx(originProjected[0][0]);
 		const oy = sy(originProjected[0][1]);
 
-		// "Towards" segments
+		// "Towards" segments (axis end facing the viewer)
 		for (let i = 0; i < ndim; i++) {
 			const toward = signs[i] >= 0 ? posAxis3D[i] : negAxis3D[i];
-			// origin: position, color, opacity
+			// origin vertex
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
 			col[vi * 4] = 0;
@@ -765,15 +764,9 @@ export class Scatterplot {
 			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 255;
 			vi++;
-			// endpoint: position, color, opacity
-			if (true) {
-				pos[vi * 2] = sx(toward[0]);
-				pos[vi * 2 + 1] = sy(toward[1]);
-			} else {
-				const [px, py] = camera.project(toward[0], toward[1], toward[2]);
-				pos[vi * 2] = sx(px);
-				pos[vi * 2 + 1] = sy(py);
-			}
+			// endpoint vertex
+			pos[vi * 2] = sx(toward[0]);
+			pos[vi * 2 + 1] = sy(toward[1]);
 			col[vi * 4] = 0;
 			col[vi * 4 + 1] = 0;
 			col[vi * 4 + 2] = 0;
@@ -781,10 +774,10 @@ export class Scatterplot {
 			vi++;
 		}
 
-		// "Away" segments
+		// "Away" segments (axis end facing away from the viewer)
 		for (let i = 0; i < ndim; i++) {
 			const away = signs[i] >= 0 ? negAxis3D[i] : posAxis3D[i];
-			// origin: position, color, opacity
+			// origin vertex
 			pos[vi * 2] = ox;
 			pos[vi * 2 + 1] = oy;
 			col[vi * 4] = 0;
@@ -792,15 +785,9 @@ export class Scatterplot {
 			col[vi * 4 + 2] = 0;
 			col[vi * 4 + 3] = 60;
 			vi++;
-			// endpoint: position, color, opacity
-			if (true) {
-				pos[vi * 2] = sx(away[0]);
-				pos[vi * 2 + 1] = sy(away[1]);
-			} else {
-				const [px, py] = camera.project(away[0], away[1], away[2]);
-				pos[vi * 2] = sx(px);
-				pos[vi * 2 + 1] = sy(py);
-			}
+			// endpoint vertex
+			pos[vi * 2] = sx(away[0]);
+			pos[vi * 2 + 1] = sy(away[1]);
 			col[vi * 4] = 0;
 			col[vi * 4 + 1] = 0;
 			col[vi * 4 + 2] = 0;
@@ -812,6 +799,6 @@ export class Scatterplot {
 		this.#webgl.render(pos, col, siz, npoint, nAxisVerts);
 
 		// Redraw the SVG overlay
-		this.#overlay.redraw(this.#opts.axisLength);
+		this.#overlay.redraw(this.axisLength);
 	}
 }

@@ -145,42 +145,59 @@ function generateData(ndim) {
 }
 
 const plot = Scatterplot.create(document.getElementById("plot"), {
-	pointSize: 20,
-	axisLength: 5,
-	// cameraZ: 2,
-	focalLength: 1,
+	basePointSize: 20,
 });
 
-plot.loadData(generateData(3));
-// Wire up slider controls
+// Slider elements
 const cameraZInput = document.getElementById("cameraZ");
 const cameraZValue = document.getElementById("cameraZValue");
 const viewAngleInput = document.getElementById("viewAngle");
 const viewAngleValue = document.getElementById("viewAngleValue");
+const pointSizeInput = document.getElementById("pointSize");
+const pointSizeValue = document.getElementById("pointSizeValue");
+const minDepthScaleInput = document.getElementById("minDepthScale");
+const minDepthScaleValue = document.getElementById("minDepthScaleValue");
+const axisLengthInput = document.getElementById("axisLength");
+const axisLengthValue = document.getElementById("axisLengthValue");
+const ndimSelect = document.getElementById("ndim");
+const projectionSelect = document.getElementById("projection");
 
+// Sync all sliders to the plot's current values
+function syncControls() {
+	cameraZInput.value = plot.cameraZ;
+	cameraZValue.textContent = plot.cameraZ.toFixed(1);
+	viewAngleInput.value = plot.viewAngle;
+	viewAngleValue.textContent = Math.round(plot.viewAngle) + "°";
+	pointSizeInput.value = plot.basePointSize;
+	pointSizeValue.textContent = plot.basePointSize;
+	minDepthScaleInput.value = plot.minDepthScale;
+	minDepthScaleValue.textContent = plot.minDepthScale;
+	axisLengthInput.value = plot.axisLength;
+	axisLengthValue.textContent = plot.axisLength.toFixed(1);
+	projectionSelect.value = plot.projection;
+}
+
+plot.loadData(generateData(3));
+syncControls();
+
+// Wire up slider controls
 cameraZInput.addEventListener("input", () => {
 	const val = parseFloat(cameraZInput.value);
 	plot.cameraZ = val;
-	cameraZValue.textContent = val;
+	cameraZValue.textContent = val.toFixed(1);
 });
 
 viewAngleInput.addEventListener("input", () => {
 	const val = parseFloat(viewAngleInput.value);
 	plot.viewAngle = val;
-	viewAngleValue.textContent = val + "°";
+	viewAngleValue.textContent = Math.round(val) + "°";
 });
-
-const pointSizeInput = document.getElementById("pointSize");
-const pointSizeValue = document.getElementById("pointSizeValue");
 
 pointSizeInput.addEventListener("input", () => {
 	const val = parseFloat(pointSizeInput.value);
-	plot.pointSize = val;
+	plot.basePointSize = val;
 	pointSizeValue.textContent = val;
 });
-
-const minDepthScaleInput = document.getElementById("minDepthScale");
-const minDepthScaleValue = document.getElementById("minDepthScaleValue");
 
 minDepthScaleInput.addEventListener("input", () => {
 	const val = parseFloat(minDepthScaleInput.value);
@@ -188,22 +205,18 @@ minDepthScaleInput.addEventListener("input", () => {
 	minDepthScaleValue.textContent = val;
 });
 
-const axisLengthInput = document.getElementById("axisLength");
-const axisLengthValue = document.getElementById("axisLengthValue");
-
 axisLengthInput.addEventListener("input", () => {
 	const val = parseFloat(axisLengthInput.value);
 	plot.axisLength = val;
-	axisLengthValue.textContent = val;
+	axisLengthValue.textContent = val.toFixed(1);
 });
 
-const ndimSelect = document.getElementById("ndim");
 ndimSelect.addEventListener("change", () => {
 	const val = parseInt(ndimSelect.value, 10);
 	plot.loadData(generateData(val));
+	syncControls();
 });
 
-const projectionSelect = document.getElementById("projection");
 projectionSelect.addEventListener("change", () => {
 	plot.projection = projectionSelect.value;
 });
