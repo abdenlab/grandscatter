@@ -1,6 +1,6 @@
 import type { RenderProps } from "@anywidget/types";
-import { tableFromIPC } from "apache-arrow";
 import { Scatterplot } from "@grandscatter/core";
+import { tableFromIPC } from "apache-arrow";
 
 import "./widget.css";
 

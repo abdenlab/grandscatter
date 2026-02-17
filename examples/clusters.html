@@ -167,7 +167,7 @@ function syncControls() {
 	cameraZInput.value = plot.cameraZ;
 	cameraZValue.textContent = plot.cameraZ.toFixed(1);
 	viewAngleInput.value = plot.viewAngle;
-	viewAngleValue.textContent = Math.round(plot.viewAngle) + "°";
+	viewAngleValue.textContent = `${Math.round(plot.viewAngle)}°`;
 	pointSizeInput.value = plot.basePointSize;
 	pointSizeValue.textContent = plot.basePointSize;
 	minDepthScaleInput.value = plot.minDepthScale;
@@ -190,7 +190,7 @@ cameraZInput.addEventListener("input", () => {
 viewAngleInput.addEventListener("input", () => {
 	const val = parseFloat(viewAngleInput.value);
 	plot.viewAngle = val;
-	viewAngleValue.textContent = Math.round(val) + "°";
+	viewAngleValue.textContent = `${Math.round(val)}°`;
 });
 
 pointSizeInput.addEventListener("input", () => {

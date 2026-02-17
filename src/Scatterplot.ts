@@ -84,7 +84,7 @@ interface ParsedScatterData {
 }
 
 export interface ScatterEvents {
-	/** Fired after any projection matrix change (drag, setProjection, etc.) */
+	/** Fired after any projection matrix change (drag, setProjectionMatrix, etc.) */
 	projection: { matrix: number[][] };
 	/** Fired when legend selection changes. */
 	select: { labels: Set<string | number> };
@@ -155,7 +155,7 @@ export function updateScaleCenter(
  *
  * Orchestrates a {@link Projection}, {@link WebGLRenderer}, {@link Overlay},
  * and {@link Legend}. Uses demand-driven rendering: state mutations
- * (drag, resize, `setProjection`, `setAxis`, legend selection) call
+ * (drag, resize, `setProjectionMatrix`, `setAxis`, legend selection) call
  * `#markDirty()`, which schedules a single `requestAnimationFrame`.
  *
  * Each render frame: projects data to 2D, computes scales, writes positions
@@ -526,12 +526,12 @@ export class Scatterplot {
 	}
 
 	/** Get a copy of the current projection matrix. */
-	getProjection(): number[][] {
+	getProjectionMatrix(): number[][] {
 		return this.#projection.getMatrix();
 	}
 
 	/** Set the projection matrix. */
-	setProjection(matrix: number[][]): void {
+	setProjectionMatrix(matrix: number[][]): void {
 		this.#projection.setMatrix(matrix);
 		this.#emitter.emit("projection", {
 			matrix: this.#projection.getMatrix(),

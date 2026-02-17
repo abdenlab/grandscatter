@@ -1,6 +1,6 @@
-import { resolve } from "node:path";
 import { readdirSync } from "node:fs";
-import { defineConfig } from "vite";
+import { resolve } from "node:path";
+import { defineConfig } from "vitest/config";
 
 const root = resolve(__dirname, "examples");
 const htmlFiles = readdirSync(root).filter((f) => f.endsWith(".html"));
@@ -17,6 +17,9 @@ export default defineConfig({
 		alias: {
 			"@grandscatter/core": resolve(__dirname, "src/index.ts"),
 		},
+	},
+	test: {
+		root: resolve(__dirname),
 	},
 	build: {
 		target: "esnext",

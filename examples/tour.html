@@ -101,7 +101,7 @@ function applyGivensRotation(M, i, j, theta) {
 	}
 }
 
-let matrix = plot.getProjection();
+let matrix = plot.getProjectionMatrix();
 let touring = false;
 let animationId = null;
 let speed = 0.0025;
@@ -128,7 +128,7 @@ function animate() {
 		applyGivensRotation(matrix, i, j, speed * omega);
 	}
 
-	plot.setProjection(matrix);
+	plot.setProjectionMatrix(matrix);
 
 	animationId = requestAnimationFrame(animate);
 }
@@ -143,7 +143,7 @@ toggleBtn.addEventListener("click", () => {
 	toggleBtn.classList.toggle("active", touring);
 
 	if (touring) {
-		matrix = plot.getProjection(); // Sync with any manual changes
+		matrix = plot.getProjectionMatrix(); // Sync with any manual changes
 		animate();
 	} else if (animationId) {
 		cancelAnimationFrame(animationId);
@@ -158,7 +158,7 @@ speedInput.addEventListener("input", (e) => {
 plot.on("projection", () => {
 	if (touring) {
 		// Sync matrix when user manually adjusts
-		matrix = plot.getProjection();
+		matrix = plot.getProjectionMatrix();
 	}
 });
 </script>

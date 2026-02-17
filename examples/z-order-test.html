@@ -68,7 +68,7 @@ const plot = Scatterplot.create(document.getElementById("plot"), {
 plot.loadData({ columns, labels, colors });
 
 // Set identity projection so z-column is [0,0,1]
-plot.setProjection([
+plot.setProjectionMatrix([
 	[1, 0, 0],
 	[0, 1, 0],
 	[0, 0, 1],
@@ -81,7 +81,7 @@ function dot(a, b) {
 }
 
 function updateInfo() {
-	const M = plot.getProjection();
+	const M = plot.getProjectionMatrix();
 	const col2 = M.map(row => row[2]);
 
 	// z-values for each point: dot(data, col2)
