@@ -1,3 +1,3 @@
-# Grandscatter Anywidget
+# Grandscatter
 
-An anywidget (Jupyter Widget) for the grandscatter library.
+An [anywidget](https://anywidget.dev) Python package for grandscatter.
