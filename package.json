@@ -11,6 +11,7 @@
 	"files": [
 		"dist"
 	],
+	"packageManager": "pnpm@9.15.3",
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsup",
