@@ -1,5 +1,5 @@
 {
-	"name": "@anyscatter/core",
+	"name": "@grandscatter/core",
 	"version": "0.1.0",
 	"type": "module",
 	"exports": {

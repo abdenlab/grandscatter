@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
 	resolve: {
 		alias: {
-			"@anyscatter/core": resolve(__dirname, "src/index.ts"),
+			"@grandscatter/core": resolve(__dirname, "src/index.ts"),
 		},
 	},
 	server: {

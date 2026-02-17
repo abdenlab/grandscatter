@@ -34,7 +34,7 @@ export class Legend {
 
 		// Create wrapper div
 		this.#wrapper = document.createElement("div");
-		this.#wrapper.className = "anyscatter-legend";
+		this.#wrapper.className = "grandscatter-legend";
 		this.#wrapper.style.cssText = `
 			padding: 8px 12px;
 			border: 1px solid #c1c1c1;
@@ -48,7 +48,7 @@ export class Legend {
 		// Optional title
 		if (options.title) {
 			const titleEl = document.createElement("div");
-			titleEl.className = "anyscatter-legend-title";
+			titleEl.className = "grandscatter-legend-title";
 			titleEl.textContent = options.title;
 			titleEl.style.cssText = `
 				font-weight: 600;
@@ -60,11 +60,11 @@ export class Legend {
 
 		// Create items
 		const items = select(this.#wrapper)
-			.selectAll<HTMLDivElement, [string, string]>(".anyscatter-legend-item")
+			.selectAll<HTMLDivElement, [string, string]>(".grandscatter-legend-item")
 			.data(this.#data)
 			.enter()
 			.append("div")
-			.attr("class", "anyscatter-legend-item")
+			.attr("class", "grandscatter-legend-item")
 			.style("display", "flex")
 			.style("align-items", "center")
 			.style("gap", "6px")
@@ -75,7 +75,7 @@ export class Legend {
 		// Color circle
 		items
 			.append("span")
-			.attr("class", "anyscatter-legend-mark")
+			.attr("class", "grandscatter-legend-mark")
 			.style("width", "10px")
 			.style("height", "10px")
 			.style("border-radius", "50%")
@@ -85,7 +85,7 @@ export class Legend {
 		// Label text
 		items
 			.append("span")
-			.attr("class", "anyscatter-legend-label")
+			.attr("class", "grandscatter-legend-label")
 			.style("color", "#333")
 			.text(([label]) => label);
 

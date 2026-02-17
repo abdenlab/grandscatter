@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>HCT116 eigenvectors - anyscatter</title>
+<title>HCT116 eigenvectors - grandscatter</title>
 <style>
 	body {
 		margin: 0;
@@ -25,12 +25,12 @@
 </style>
 </head>
 <body>
-<h1>anyscatter</h1>
+<h1>grandscatter</h1>
 <p>Drag the axis handles to rotate the projection.</p>
 <div id="plot"></div>
 <script type="module">
 import { tableFromIPC } from "https://esm.sh/apache-arrow@18.1.0";
-import { Scatterplot } from "@anyscatter/core";
+import { Scatterplot } from "@grandscatter/core";
 
 const table = await tableFromIPC(fetch("eigs.arrow"));
 

@@ -42,7 +42,7 @@ export class Overlay {
 
 		this.svg = figure
 			.insert("svg", ":first-child")
-			.attr("class", "anyscatter-overlay")
+			.attr("class", "grandscatter-overlay")
 			.style("position", "absolute")
 			.style("top", "0")
 			.style("left", "0")
@@ -85,11 +85,11 @@ export class Overlay {
 
 		// Toward-facing anchors (with labels)
 		this.towardsAnchors = this.svg
-			.selectAll<SVGGElement, string>(".anyscatter-anchor")
+			.selectAll<SVGGElement, string>(".grandscatter-anchor")
 			.data(dimLabels)
 			.enter()
 			.append("g")
-			.attr("class", "anyscatter-anchor")
+			.attr("class", "grandscatter-anchor")
 			.style("pointer-events", "all")
 			.attr("transform", origin);
 
@@ -113,11 +113,11 @@ export class Overlay {
 
 		// Away-facing anchors (no labels)
 		this.awayAnchors = this.svg
-			.selectAll<SVGGElement, string>(".anyscatter-anchor-away")
+			.selectAll<SVGGElement, string>(".grandscatter-anchor-away")
 			.data(dimLabels)
 			.enter()
 			.append("g")
-			.attr("class", "anyscatter-anchor-away")
+			.attr("class", "grandscatter-anchor-away")
 			.style("pointer-events", "all")
 			.attr("transform", origin);
 

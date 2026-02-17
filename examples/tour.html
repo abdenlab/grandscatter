@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Grand Tour - anyscatter</title>
+<title>Grand Tour - grandscatter</title>
 <style>
 	body {
 		margin: 0;
@@ -63,7 +63,7 @@
 
 <script type="module">
 import { tableFromIPC } from "https://esm.sh/apache-arrow@18.1.0";
-import { Scatterplot } from "@anyscatter/core";
+import { Scatterplot } from "@grandscatter/core";
 
 const table = await tableFromIPC(fetch("eigs.arrow"));
 
