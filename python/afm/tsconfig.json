@@ -1,0 +1,15 @@
+{
+	"compilerOptions": {
+		"module": "ESNext",
+		"target": "ES2020",
+		"moduleResolution": "bundler",
+		"lib": ["DOM", "DOM.Iterable", "ES2020"],
+		"strict": true,
+		"skipLibCheck": true,
+		"noEmit": true,
+		"paths": {
+			"@grandscatter/core": ["../../src/index.ts"]
+		}
+	},
+	"include": ["./**/*.ts"]
+}
