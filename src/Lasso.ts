@@ -50,10 +50,7 @@ export function pointsInPolygon(
 			const yi = polygon[i][1];
 			const xj = polygon[j][0];
 			const yj = polygon[j][1];
-			if (
-				(yi > y) !== (yj > y) &&
-				x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
-			) {
+			if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
 				inside = !inside;
 			}
 		}
@@ -179,11 +176,7 @@ export class Lasso {
 
 		// Don't intercept clicks/drags on axis handles.
 		const target = event.target as Element;
-		if (
-			target.closest(
-				".grandscatter-anchor, .grandscatter-anchor-away",
-			)
-		) {
+		if (target.closest(".grandscatter-anchor, .grandscatter-anchor-away")) {
 			return;
 		}
 
@@ -193,10 +186,7 @@ export class Lasso {
 		this.#pointerId = event.pointerId;
 
 		const rect = this.#el.getBoundingClientRect();
-		this.#polygon.push([
-			event.clientX - rect.left,
-			event.clientY - rect.top,
-		]);
+		this.#polygon.push([event.clientX - rect.left, event.clientY - rect.top]);
 
 		this.#pathElement.style("display", null);
 		this.#updatePath();
@@ -209,10 +199,7 @@ export class Lasso {
 	#onPointerMove(event: PointerEvent): void {
 		if (!this.#active) return;
 		const rect = this.#el.getBoundingClientRect();
-		this.#polygon.push([
-			event.clientX - rect.left,
-			event.clientY - rect.top,
-		]);
+		this.#polygon.push([event.clientX - rect.left, event.clientY - rect.top]);
 		this.#updatePath();
 	}
 

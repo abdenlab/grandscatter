@@ -53,7 +53,7 @@ export default {
 			plot.basePointSize = model.get("base_point_size");
 		});
 		model.on("change:selected_points", () => {
-			plot.setSelectedPoints(model.get("selected_points"));
+			plot.select(model.get("selected_points"));
 		});
 
 		// Sync lasso selection from JS → Python.
