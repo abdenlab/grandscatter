@@ -156,7 +156,7 @@ export class Overlay {
 		// Shift-click to flip axis orientation
 		const makeFlipHandler = (nodes: SVGGElement[]) =>
 			function (this: SVGGElement, event: MouseEvent) {
-				if (!event.shiftKey) return;
+				if (!event.altKey) return;
 				event.preventDefault();
 				const i = nodes.indexOf(this);
 				self.#projection.flipAxis(i);

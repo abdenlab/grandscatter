@@ -3,6 +3,7 @@ import { scaleLinear } from "d3-scale";
 import { schemeCategory10 } from "d3-scale-chromatic";
 import { select } from "d3-selection";
 import { Emitter } from "./Emitter.js";
+import { Lasso } from "./Lasso.js";
 import { Legend } from "./Legend.js";
 import { columnMaxAbs, identity, neg } from "./linalg.js";
 import { Overlay } from "./Overlay.js";
@@ -88,6 +89,8 @@ export interface ScatterEvents {
 	projection: { matrix: number[][] };
 	/** Fired when legend selection changes. */
 	select: { labels: Set<string | number> };
+	/** Fired when lasso selection changes. Contains original data indices. */
+	lasso: { indices: number[] };
 	/** Fired on resize. */
 	resize: { width: number; height: number };
 }
@@ -179,6 +182,10 @@ export class Scatterplot {
 	#figure: ReturnType<typeof select<HTMLElement, unknown>>;
 	#sx: Scale;
 	#sy: Scale;
+
+	// Lasso selection
+	#lasso!: Lasso;
+	#selectedPoints: Set<number> | null = null;
 
 	// Point rendering
 	#webgl: WebGLRenderer;
@@ -274,6 +281,20 @@ export class Scatterplot {
 			this.#sy,
 		);
 
+		// Initialize lasso selection
+		this.#lasso = new Lasso(this.#figure, {
+			onSelect: (indices: number[]) => {
+				this.#selectedPoints = new Set(indices);
+				this.#emitter.emit("lasso", { indices });
+				this.#markDirty();
+			},
+			onClear: () => {
+				this.#selectedPoints = null;
+				this.#emitter.emit("lasso", { indices: [] });
+				this.#markDirty();
+			},
+		});
+
 		// ResizeObserver - observe the figure wrapper for canvas sizing
 		this.#resizeObserver = new ResizeObserver(() => this.resize());
 		this.#resizeObserver.observe(this.#figureWrapper);
@@ -315,6 +336,7 @@ export class Scatterplot {
 		}
 
 		this.#visibleCategories = null;
+		this.#selectedPoints = null;
 		this.resize();
 
 		if (!this.#playing) {
@@ -517,6 +539,7 @@ export class Scatterplot {
 		resizeCanvas(this.#canvas, this.#opts.pixelRatio);
 		this.#webgl.resize();
 		this.#overlay.resize();
+		this.#lasso.resize();
 		this.#legend?.resize();
 		this.#emitter.emit("resize", {
 			width: this.#canvas.clientWidth,
@@ -633,6 +656,23 @@ export class Scatterplot {
 		this.#markDirty();
 	}
 
+	/** Get the set of lasso-selected original data indices, or null if no lasso is active. */
+	get selectedPoints(): ReadonlySet<number> | null {
+		return this.#selectedPoints;
+	}
+
+	/** Programmatically clear the lasso selection. */
+	clearLasso(): void {
+		this.#lasso.clear();
+	}
+
+	/** Programmatically set lasso-selected points by original data indices. */
+	setSelectedPoints(indices: number[]): void {
+		this.#selectedPoints = indices.length > 0 ? new Set(indices) : null;
+		this.#emitter.emit("lasso", { indices });
+		this.#markDirty();
+	}
+
 	/** Subscribe to events. Returns an unsubscribe function. */
 	on<K extends keyof ScatterEvents & string>(
 		event: K,
@@ -646,6 +686,7 @@ export class Scatterplot {
 		this.pause();
 		this.#resizeObserver.disconnect();
 		this.#overlay.destroy();
+		this.#lasso.destroy();
 		this.#legend?.destroy();
 		this.#webgl.destroy();
 		this.#figureWrapper.remove();
@@ -744,7 +785,15 @@ export class Scatterplot {
 			// opacity
 			// Use the stored alpha value if there's no visibility filter or
 			// if the point is not masked under the visibility filter.
-			col[c4 + 3] = vis === null || vis.has(catIdx) ? alphas[i] : 0;
+			let alpha = vis === null || vis.has(catIdx) ? alphas[i] : 0;
+
+			// Lasso selection dimming: unselected points get 10% opacity.
+			const sel = this.#selectedPoints;
+			if (sel !== null && alpha > 0) {
+				alpha = sel.has(i) ? alpha : Math.round(alpha * 0.1);
+			}
+
+			col[c4 + 3] = alpha;
 		}
 
 		// Append the vertices for the axis line segments to the flat buffers
@@ -800,5 +849,8 @@ export class Scatterplot {
 
 		// Redraw the SVG overlay
 		this.#overlay.redraw(this.axisLength);
+
+		// Update lasso with current render state for PIP hit testing.
+		this.#lasso.setRenderState(this.#glPositions, npoint, this.#order);
 	}
 }
