@@ -46,6 +46,7 @@ dev = [
     "anywidget[dev]>=0.9.21",
     "watchfiles",
     "jupyterlab",
+    "marimo>=0.19.11",
 ]
 
 [tool.hatch.envs.default]
