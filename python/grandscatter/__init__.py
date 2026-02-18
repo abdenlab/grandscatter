@@ -34,6 +34,7 @@ class Scatter(anywidget.AnyWidget):
     camera_z = traitlets.Float(None, allow_none=True).tag(sync=True)
     view_angle = traitlets.Float(45).tag(sync=True)
     base_point_size = traitlets.Float(6).tag(sync=True)
+    selected_points = traitlets.List(traitlets.Int(), []).tag(sync=True)
 
     def __init__(
         self,
