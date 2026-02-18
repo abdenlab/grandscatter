@@ -13,6 +13,12 @@ Grandscatter supports two projection modes:
 * orthographic: a flat projection where distances within the 2D canvas are the same as in the projected 2D subspace
 * perspective: a 3D projection view, including foreshortening of distal points to improve depth perception
 
+Current supported interactions:
+
+* Drag an axis handle to rotate it
+* Option/alt+click an axis handle to flip its orientation
+* Shift+drag to lasso-select points
+
 This library was originally based on the [Grand Tour](https://doi.org/10.1137/0906011) implementation in Li et al., 2020. [Visualizing Neural Networks with the Grand Tour](https://doi.org/10.23915/distill.00025). Our original implementation was [eigen-tour](https://github.com/abdenlab/eigen-tour).
 
 ## Development
