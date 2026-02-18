@@ -14,6 +14,7 @@ interface Model {
 	camera_z: number | null;
 	view_angle: number;
 	base_point_size: number;
+	selected_points: number[];
 }
 
 export default {
@@ -50,6 +51,15 @@ export default {
 		});
 		model.on("change:base_point_size", () => {
 			plot.basePointSize = model.get("base_point_size");
+		});
+		model.on("change:selected_points", () => {
+			plot.setSelectedPoints(model.get("selected_points"));
+		});
+
+		// Sync lasso selection from JS → Python.
+		plot.on("lasso", ({ indices }) => {
+			model.set("selected_points", indices);
+			model.save_changes();
 		});
 
 		return () => plot.destroy();
