@@ -656,21 +656,23 @@ export class Scatterplot {
 		this.#markDirty();
 	}
 
-	/** Get the set of lasso-selected original data indices, or null if no lasso is active. */
-	get selectedPoints(): ReadonlySet<number> | null {
+	/**
+	 * Programmatically set selected points by original data indices.
+	 * Does not trigger a lasso event.
+	*/
+	select(indices: number[]): void {
+		this.#selectedPoints = indices.length > 0 ? new Set(indices) : null;
+		this.#markDirty();
+	}
+
+	/** Get the set of selected original data indices, or null if no selection is active. */
+	get selection(): ReadonlySet<number> | null {
 		return this.#selectedPoints;
 	}
 
-	/** Programmatically clear the lasso selection. */
+	/** Programmatically clear the lasso UI and selection */
 	clearLasso(): void {
 		this.#lasso.clear();
-	}
-
-	/** Programmatically set lasso-selected points by original data indices. */
-	setSelectedPoints(indices: number[]): void {
-		this.#selectedPoints = indices.length > 0 ? new Set(indices) : null;
-		this.#emitter.emit("lasso", { indices });
-		this.#markDirty();
 	}
 
 	/** Subscribe to events. Returns an unsubscribe function. */
