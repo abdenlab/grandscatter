@@ -91,6 +91,8 @@ export interface ScatterEvents {
 	select: { labels: Set<string | number> };
 	/** Fired when lasso selection changes. Contains original data indices. */
 	lasso: { indices: number[] };
+	/** Fired when zoom level changes (wheel, viewAngle, zoomLevel). */
+	zoom: { viewAngle: number; zoomLevel: number };
 	/** Fired on resize. */
 	resize: { width: number; height: number };
 }
@@ -200,6 +202,9 @@ export class Scatterplot {
 	#legend?: Legend;
 	#legendContainer: HTMLElement;
 
+	// Zoom
+	#zoomLevel = 1.0;
+
 	// Drawing state
 	#playing = false;
 	#pendingFrame = 0;
@@ -294,6 +299,32 @@ export class Scatterplot {
 				this.#markDirty();
 			},
 		});
+
+		// Wheel zoom
+		this.#figureWrapper.addEventListener(
+			"wheel",
+			(e: WheelEvent) => {
+				e.preventDefault();
+				const step = Math.sign(e.deltaY);
+				if (this.#opts.projection === "perspective") {
+					this.#opts.viewAngle = Math.max(
+						1,
+						Math.min(120, this.#opts.viewAngle + step * 2),
+					);
+				} else {
+					this.#zoomLevel = Math.max(
+						0.1,
+						Math.min(10, this.#zoomLevel * (1 - step * 0.05)),
+					);
+				}
+				this.#emitter.emit("zoom", {
+					viewAngle: this.#opts.viewAngle,
+					zoomLevel: this.#zoomLevel,
+				});
+				this.#markDirty();
+			},
+			{ passive: false },
+		);
 
 		// ResizeObserver - observe the figure wrapper for canvas sizing
 		this.#resizeObserver = new ResizeObserver(() => this.resize());
@@ -659,7 +690,7 @@ export class Scatterplot {
 	/**
 	 * Programmatically set selected points by original data indices.
 	 * Does not trigger a lasso event.
-	*/
+	 */
 	select(indices: number[]): void {
 		this.#selectedPoints = indices.length > 0 ? new Set(indices) : null;
 		this.#markDirty();
@@ -717,10 +748,14 @@ export class Scatterplot {
 		const zcoords = projected.map((point) => point[2]);
 
 		// Project the axis endpoints
-		const r = this.axisLength;
+		const radius = orthographic
+			? this.axisLength / this.#zoomLevel
+			: this.axisLength;
 		const signs = this.#projection.axisZSigns();
-		const posAxisData = identity(ndim).map((row) => row.map((v) => v * r));
-		const negAxisData = identity(ndim).map((row) => row.map((v) => -v * r));
+		const posAxisData = identity(ndim).map((row) => row.map((v) => v * radius));
+		const negAxisData = identity(ndim).map((row) =>
+			row.map((v) => -v * radius),
+		);
 		const posAxis3D = this.#projection.projectXYZ(posAxisData);
 		const negAxis3D = this.#projection.projectXYZ(negAxisData);
 		const originProjected = this.#projection.projectXY([
@@ -850,7 +885,9 @@ export class Scatterplot {
 		this.#webgl.render(pos, col, siz, npoint, nAxisVerts);
 
 		// Redraw the SVG overlay
-		this.#overlay.redraw(this.axisLength);
+		this.#overlay.redraw(
+			orthographic ? this.axisLength / this.#zoomLevel : this.axisLength,
+		);
 
 		// Update lasso with current render state for PIP hit testing.
 		this.#lasso.setRenderState(this.#glPositions, npoint, this.#order);

@@ -220,6 +220,10 @@ ndimSelect.addEventListener("change", () => {
 projectionSelect.addEventListener("change", () => {
 	plot.projection = projectionSelect.value;
 });
+
+plot.on("zoom", () => {
+	syncControls();
+});
 </script>
 </body>
 </html>
