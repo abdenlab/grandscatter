@@ -140,9 +140,12 @@ export class Overlay {
 					const i = nodes.indexOf(this);
 					const dx = self.#sx.invert(event.dx) - self.#sx.invert(0);
 					const dy = self.#sy.invert(event.dy) - self.#sy.invert(0);
+					// Normalize by half-domain so sensitivity is independent of data scale
+					const hx = (self.#sx.domain()[1] - self.#sx.domain()[0]) / 2;
+					const hy = (self.#sy.domain()[1] - self.#sy.domain()[0]) / 2;
 					const axis = self.#projection.getAxis(i);
-					axis[0] += dx;
-					axis[1] += dy;
+					axis[0] += dx / (hx || 1);
+					axis[1] += dy / (hy || 1);
 					self.#projection.setAxis(i, axis);
 					callbacks.onProjectionChanged();
 				})
