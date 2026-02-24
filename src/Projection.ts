@@ -1,4 +1,11 @@
-import { circularBasis, clone, dot, matmul, orthogonalize } from "./linalg.js";
+import {
+	circularBasis,
+	clone,
+	dot,
+	identity,
+	matmul,
+	orthogonalize,
+} from "./linalg.js";
 
 /**
  * Perspective camera that transforms 3D projected coordinates to 2D canvas
@@ -178,6 +185,27 @@ export class Projection {
 	axisZSigns(): number[] {
 		if (this.#ndim < 3) return new Array(this.#ndim).fill(1);
 		return this.#matrix.map((row) => (row[2] >= 0 ? 1 : -1));
+	}
+
+	/**
+	 * Rotate the 3D projection subspace (columns 0–2) by a 3×3 rotation matrix.
+	 * Higher dimensions are left untouched. No-op if ndim < 3.
+	 *
+	 * Since both the projection matrix and the rotation are orthogonal,
+	 * the result is automatically orthogonal — no re-orthogonalization needed.
+	 */
+	rotateSubspace(R: number[][]): void {
+		if (this.#ndim < 3) return;
+
+		// Build ndim×ndim block-diagonal: R in top-left 3×3, identity elsewhere
+		const B = identity(this.#ndim);
+		for (let i = 0; i < 3; i++) {
+			for (let j = 0; j < 3; j++) {
+				B[i][j] = R[i][j];
+			}
+		}
+
+		this.#matrix = matmul(this.#matrix, B);
 	}
 
 	/**

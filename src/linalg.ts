@@ -256,6 +256,25 @@ export function determinant(m: number[][]): number {
 	return det;
 }
 
+/**
+ * Build a 3×3 rotation matrix from screen-space drag deltas (in radians).
+ * Returns Ry · Rx where Rx rotates around the X-axis by thetaX and
+ * Ry rotates around the Y-axis by thetaY.
+ */
+export function rotationMatrix3(thetaX: number, thetaY: number): number[][] {
+	const cx = Math.cos(thetaX);
+	const sx = Math.sin(thetaX);
+	const cy = Math.cos(thetaY);
+	const sy = Math.sin(thetaY);
+
+	// Ry · Rx
+	return [
+		[cy, sy * sx, sy * cx],
+		[0, cx, -sx],
+		[-sy, cy * sx, cy * cx],
+	];
+}
+
 /** Flatten a 2D array into a Float32Array (row-major). */
 export function flatten(m: number[][]): Float32Array {
 	const rows = m.length;

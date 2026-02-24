@@ -5,7 +5,7 @@ import { select } from "d3-selection";
 import { Emitter } from "./Emitter.js";
 import { Lasso } from "./Lasso.js";
 import { Legend } from "./Legend.js";
-import { columnMaxAbs, identity, neg } from "./linalg.js";
+import { columnMaxAbs, identity, neg, rotationMatrix3 } from "./linalg.js";
 import { Overlay } from "./Overlay.js";
 import { PerspectiveCamera, Projection } from "./Projection.js";
 import type { ArrowLoadOptions, ArrowTable, Scale } from "./types.js";
@@ -325,6 +325,44 @@ export class Scatterplot {
 			},
 			{ passive: false },
 		);
+
+		// Right-click drag: trackball rotation of the 3D projection subspace
+		this.#figureWrapper.addEventListener("contextmenu", (e) =>
+			e.preventDefault(),
+		);
+		this.#figureWrapper.addEventListener("pointerdown", (e: PointerEvent) => {
+			if (e.button !== 2) return;
+			const target = e.target as Element;
+			if (target.closest(".grandscatter-anchor, .grandscatter-anchor-away"))
+				return;
+
+			e.preventDefault();
+			this.#figureWrapper.setPointerCapture(e.pointerId);
+			let lastX = e.clientX;
+			let lastY = e.clientY;
+
+			const onMove = (ev: PointerEvent) => {
+				const dx = ev.clientX - lastX;
+				const dy = ev.clientY - lastY;
+				lastX = ev.clientX;
+				lastY = ev.clientY;
+				const R = rotationMatrix3(-dy * 0.005, dx * 0.005);
+				this.#projection.rotateSubspace(R);
+				this.#emitter.emit("projection", {
+					matrix: this.#projection.getMatrix(),
+				});
+				this.#markDirty();
+			};
+
+			const onUp = (ev: PointerEvent) => {
+				this.#figureWrapper.releasePointerCapture(ev.pointerId);
+				this.#figureWrapper.removeEventListener("pointermove", onMove);
+				this.#figureWrapper.removeEventListener("pointerup", onUp);
+			};
+
+			this.#figureWrapper.addEventListener("pointermove", onMove);
+			this.#figureWrapper.addEventListener("pointerup", onUp);
+		});
 
 		// ResizeObserver - observe the figure wrapper for canvas sizing
 		this.#resizeObserver = new ResizeObserver(() => this.resize());
