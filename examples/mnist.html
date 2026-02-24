@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MNIST PCA - grandscatter</title>
+<style>
+	body {
+		margin: 0;
+		font-family: system-ui, sans-serif;
+		background: #f5f5f5;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		padding: 2rem;
+	}
+	h1 { margin-bottom: 0.5rem; }
+	p { color: #666; margin-top: 0; }
+	#plot {
+		width: 1028px;
+		height: 1028px;
+		background: white;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+	}
+</style>
+</head>
+<body>
+<h1>MNIST PCA</h1>
+<p>10 principal components of MNIST digits. Drag axes to rotate, right-click drag to spin, scroll to zoom.</p>
+<div id="plot"></div>
+<script type="module">
+import { tableFromIPC } from "https://esm.sh/apache-arrow@18.1.0";
+import { Scatterplot } from "@grandscatter/core";
+
+const table = await tableFromIPC(fetch("mnist_pca.arrow"));
+
+const plot = Scatterplot.create(document.getElementById("plot"), {
+	basePointSize: 8,
+});
+plot.loadArrow(table, {
+	dimensions: ["PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9"],
+	labelColumn: "target",
+});
+</script>
+</body>
+</html>
