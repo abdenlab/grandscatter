@@ -163,46 +163,45 @@ function normalizeVec(v: number[]): number[] {
 }
 
 /**
- * Build an ndim x ndim orthogonal matrix whose first 2 columns place
- * the n axes evenly around a circle in the 2D projection.
+ * Build an ndim × ndim orthogonal matrix whose first 2 columns place
+ * the n axes evenly over a half-circle in the 2D projection.
  *
- * Column 0 = √(2/n) · [cos(2πi/n)]
- * Column 1 = √(2/n) · [sin(2πi/n)]
- * Remaining columns completed via Gram-Schmidt.
+ * Columns are cos/sin pairs at odd DFT harmonics k = 1, 3, 5, …:
+ *   Column 2j   = √(2/n) · [cos(πi·k/n)]   (k = 2j+1)
+ *   Column 2j+1 = √(2/n) · [sin(πi·k/n)]
+ *
+ * Odd harmonics with base angle π/n are mutually orthogonal, so no
+ * Gram-Schmidt completion is needed.
  */
 export function circularBasis(ndim: number): number[][] {
 	// For n ≤ 2, circular layout is degenerate; use identity
 	if (ndim <= 2) return identity(ndim);
 
+	// Build an orthonormal basis from odd DFT harmonics k = 1, 3, 5, ...
+	// Each harmonic contributes a cos/sin pair.
 	const a = Math.sqrt(2 / ndim);
-
-	// Build columns
 	const cols: number[][] = [];
 
-	// Column 0: cos
-	cols.push(
-		Array.from({ length: ndim }, (_, i) => a * Math.cos((Math.PI * i) / ndim)),
-	);
+	for (let k = 1; cols.length < ndim; k += 2) {
+		// cos column (at k = ndim, norm is √n instead of √(n/2))
+		const s = k === ndim ? 1 / Math.sqrt(ndim) : a;
+		cols.push(
+			Array.from(
+				{ length: ndim },
+				(_, i) => s * Math.cos((Math.PI * i * k) / ndim),
+			),
+		);
+		// For odd ndim, k = ndim is the last harmonic and its sin column
+		// is degenerate (sin(πi) = 0 for all i), so we stop here.
+		if (cols.length >= ndim) break;
 
-	// Column 1: sin
-	cols.push(
-		Array.from({ length: ndim }, (_, i) => a * Math.sin((Math.PI * i) / ndim)),
-	);
-
-	// Complete the basis: try each standard basis vector, keep if independent
-	for (let j = 0; j < ndim && cols.length < ndim; j++) {
-		let v: number[] = Array.from({ length: ndim }, (_, k) => (k === j ? 1 : 0));
-
-		// Subtract projections onto existing columns
-		for (const col of cols) {
-			const d = dot(col, v);
-			v = sub(v, scale(d, col));
-		}
-
-		const n = norm2(v);
-		if (n > 1e-10) {
-			cols.push(v.map((x) => x / n));
-		}
+		// sin column
+		cols.push(
+			Array.from(
+				{ length: ndim },
+				(_, i) => a * Math.sin((Math.PI * i * k) / ndim),
+			),
+		);
 	}
 
 	// Convert column-major to row-major: matrix[i][j] = cols[j][i]
