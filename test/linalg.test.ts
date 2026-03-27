@@ -239,13 +239,13 @@ describe("circularBasis", () => {
 		}
 	});
 
-	it("places axes evenly around a circle in the first 2 columns", () => {
+	it("places axes evenly over a half-circle in the first 2 columns", () => {
 		const n = 5;
 		const m = circularBasis(n);
 		const a = Math.sqrt(2 / n);
 
 		for (let i = 0; i < n; i++) {
-			const angle = (2 * Math.PI * i) / n;
+			const angle = (Math.PI * i) / n;
 			expect(m[i][0]).toBeCloseTo(a * Math.cos(angle), 10);
 			expect(m[i][1]).toBeCloseTo(a * Math.sin(angle), 10);
 		}

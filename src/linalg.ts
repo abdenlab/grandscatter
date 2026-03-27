@@ -181,18 +181,12 @@ export function circularBasis(ndim: number): number[][] {
 
 	// Column 0: cos
 	cols.push(
-		Array.from(
-			{ length: ndim },
-			(_, i) => a * Math.cos((2 * Math.PI * i) / ndim),
-		),
+		Array.from({ length: ndim }, (_, i) => a * Math.cos((Math.PI * i) / ndim)),
 	);
 
 	// Column 1: sin
 	cols.push(
-		Array.from(
-			{ length: ndim },
-			(_, i) => a * Math.sin((2 * Math.PI * i) / ndim),
-		),
+		Array.from({ length: ndim }, (_, i) => a * Math.sin((Math.PI * i) / ndim)),
 	);
 
 	// Complete the basis: try each standard basis vector, keep if independent
