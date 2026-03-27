@@ -109,6 +109,7 @@ export class Overlay {
 			.attr("fill", "black")
 			.style("font-size", "11px")
 			.style("pointer-events", "none")
+			.style("user-select", "none")
 			.text((label) => label);
 
 		// Away-facing anchors (no labels)
